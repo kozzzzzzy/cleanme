@@ -12,6 +12,5 @@ CleanMe is a Home Assistant custom integration that:
   - Task count
   - Last analysed time
 
-No motion sensors, no Frigate, no activity feed – **just tidy tasks**.
 
 See `custom_components/cleanme` for the integration code.

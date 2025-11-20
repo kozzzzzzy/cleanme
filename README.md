@@ -24,3 +24,7 @@ See `custom_components/cleanme` for the integration code.
 ### Manual
 - Copy the `custom_components/cleanme` folder into your Home Assistant `custom_components` directory.
 - Restart Home Assistant after copying so the integration is discovered.
+
+### Troubleshooting
+- If the config flow page fails to load, check **Settings → System → Logs** for messages from `custom_components.cleanme` and share them when reporting issues.
+- After updating the integration, always restart Home Assistant so the refreshed files and translations are used.

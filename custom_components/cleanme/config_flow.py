@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import logging
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -27,6 +29,9 @@ from .const import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _default_model(provider: str) -> str:
     if provider == PROVIDER_OPENAI:
         return DEFAULT_MODEL_OPENAI
@@ -44,14 +49,18 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            name = user_input[CONF_NAME]
-            await self.async_set_unique_id(f"{DOMAIN}_{name.lower()}")
-            self._abort_if_unique_id_configured()
+            try:
+                name = user_input[CONF_NAME]
+                await self.async_set_unique_id(f"{DOMAIN}_{name.lower()}")
+                self._abort_if_unique_id_configured()
 
-            return self.async_create_entry(
-                title=name,
-                data=user_input,
-            )
+                return self.async_create_entry(
+                    title=name,
+                    data=user_input,
+                )
+            except Exception:  # pragma: no cover - defensive guard for runtime issues
+                LOGGER.exception("CleanMe config flow failed")
+                errors["base"] = "unknown"
 
         provider_default = PROVIDER_OPENAI
 

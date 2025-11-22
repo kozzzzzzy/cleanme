@@ -9,33 +9,25 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import aiohttp_client
 
 from .const import (
     DOMAIN,
     CONF_NAME,
     CONF_CAMERA_ENTITY,
-    CONF_PROVIDER,
-    CONF_MODEL,
     CONF_API_KEY,
-    CONF_BASE_URL,
-    CONF_MODE,
-    CONF_RUNS_PER_DAY,
-    MODE_MANUAL,
-    MODE_AUTO,
-    PROVIDER_OPTIONS,
-    PROVIDER_OPENAI,
-    DEFAULT_MODEL_OPENAI,
-    RUNS_PER_DAY_OPTIONS,
+    CONF_PERSONALITY,
+    CONF_PICKINESS,
+    CONF_CHECK_FREQUENCY,
+    PERSONALITY_OPTIONS,
+    PERSONALITY_THOROUGH,
+    FREQUENCY_OPTIONS,
+    FREQUENCY_MANUAL,
 )
+from .gemini_client import GeminiClient
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _default_model(provider: str) -> str:
-    if provider == PROVIDER_OPENAI:
-        return DEFAULT_MODEL_OPENAI
-    return ""
 
 
 class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -50,34 +42,41 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                name = user_input[CONF_NAME]
-                await self.async_set_unique_id(f"{DOMAIN}_{name.lower()}")
-                self._abort_if_unique_id_configured()
+                # Validate API key
+                api_key = user_input[CONF_API_KEY]
+                session = aiohttp_client.async_get_clientsession(self.hass)
+                client = GeminiClient(api_key)
+                
+                is_valid = await client.validate_api_key(session)
+                if not is_valid:
+                    errors["base"] = "invalid_api_key"
+                else:
+                    name = user_input[CONF_NAME]
+                    await self.async_set_unique_id(f"{DOMAIN}_{name.lower().replace(' ', '_')}")
+                    self._abort_if_unique_id_configured()
 
-                return self.async_create_entry(
-                    title=name,
-                    data=user_input,
-                )
-            except Exception:  # pragma: no cover - defensive guard for runtime issues
-                LOGGER.exception("CleanMe config flow failed")
+                    return self.async_create_entry(
+                        title=name,
+                        data=user_input,
+                    )
+            except Exception as err:
+                LOGGER.exception("CleanMe config flow failed: %s", err)
                 errors["base"] = "unknown"
-
-        provider_default = PROVIDER_OPENAI
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME): str,
                 vol.Required(CONF_CAMERA_ENTITY): cv.entity_id,
-                vol.Required(CONF_MODE, default=MODE_MANUAL): vol.In(
-                    [MODE_MANUAL, MODE_AUTO]
+                vol.Required(CONF_PERSONALITY, default=PERSONALITY_THOROUGH): vol.In(
+                    list(PERSONALITY_OPTIONS.keys())
                 ),
-                vol.Required(CONF_RUNS_PER_DAY, default=1): vol.In(RUNS_PER_DAY_OPTIONS),
-                vol.Required(CONF_PROVIDER, default=provider_default): vol.In(
-                    list(PROVIDER_OPTIONS.keys())
+                vol.Required(CONF_PICKINESS, default=3): vol.All(
+                    int, vol.Range(min=1, max=5)
                 ),
-                vol.Required(CONF_MODEL, default=_default_model(provider_default)): str,
+                vol.Required(CONF_CHECK_FREQUENCY, default=FREQUENCY_MANUAL): vol.In(
+                    list(FREQUENCY_OPTIONS.keys())
+                ),
                 vol.Required(CONF_API_KEY): str,
-                vol.Optional(CONF_BASE_URL, default=""): str,
             }
         )
 
@@ -104,13 +103,34 @@ class CleanMeOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: Dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
+        errors: dict[str, str] = {}
+        
         if user_input is not None:
-            data = {**self._entry.data, **user_input}
-            return self.async_create_entry(title="", data=data)
+            try:
+                # Validate API key if changed
+                api_key = user_input[CONF_API_KEY]
+                old_api_key = self._entry.data.get(CONF_API_KEY, "")
+                
+                if api_key != old_api_key:
+                    session = aiohttp_client.async_get_clientsession(self.hass)
+                    client = GeminiClient(api_key)
+                    
+                    is_valid = await client.validate_api_key(session)
+                    if not is_valid:
+                        errors["base"] = "invalid_api_key"
+                
+                if not errors:
+                    # Update the config entry data
+                    self.hass.config_entries.async_update_entry(
+                        self._entry,
+                        data={**self._entry.data, **user_input}
+                    )
+                    return self.async_create_entry(title="", data={})
+            except Exception as err:
+                LOGGER.exception("CleanMe options flow failed: %s", err)
+                errors["base"] = "unknown"
 
         data = {**self._entry.data, **self._entry.options}
-
-        provider = data.get(CONF_PROVIDER, PROVIDER_OPENAI)
 
         schema = vol.Schema(
             {
@@ -119,22 +139,20 @@ class CleanMeOptionsFlow(config_entries.OptionsFlow):
                     CONF_CAMERA_ENTITY,
                     default=data.get(CONF_CAMERA_ENTITY, ""),
                 ): cv.entity_id,
-                vol.Required(CONF_MODE, default=data.get(CONF_MODE, MODE_MANUAL)): vol.In(
-                    [MODE_MANUAL, MODE_AUTO]
-                ),
                 vol.Required(
-                    CONF_RUNS_PER_DAY,
-                    default=int(data.get(CONF_RUNS_PER_DAY, 1)),
-                ): vol.In(RUNS_PER_DAY_OPTIONS),
-                vol.Required(CONF_PROVIDER, default=provider): vol.In(
-                    list(PROVIDER_OPTIONS.keys())
-                ),
+                    CONF_PERSONALITY,
+                    default=data.get(CONF_PERSONALITY, PERSONALITY_THOROUGH),
+                ): vol.In(list(PERSONALITY_OPTIONS.keys())),
                 vol.Required(
-                    CONF_MODEL, default=data.get(CONF_MODEL, _default_model(provider))
-                ): str,
+                    CONF_PICKINESS,
+                    default=int(data.get(CONF_PICKINESS, 3)),
+                ): vol.All(int, vol.Range(min=1, max=5)),
+                vol.Required(
+                    CONF_CHECK_FREQUENCY,
+                    default=data.get(CONF_CHECK_FREQUENCY, FREQUENCY_MANUAL),
+                ): vol.In(list(FREQUENCY_OPTIONS.keys())),
                 vol.Required(CONF_API_KEY, default=data.get(CONF_API_KEY, "")): str,
-                vol.Optional(CONF_BASE_URL, default=data.get(CONF_BASE_URL, "")): str,
             }
         )
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

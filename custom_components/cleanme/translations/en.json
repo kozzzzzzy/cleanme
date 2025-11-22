@@ -2,24 +2,25 @@
   "config": {
     "step": {
       "user": {
-        "title": "CleanMe – Add tidy zone",
-        "description": "Configure a room/area that CleanMe will analyse using your camera and an AI vision model.",
+        "title": "CleanMe – Add Tidy Zone",
+        "description": "Configure a room/area that CleanMe will analyze using your camera and Gemini 3 Pro Preview AI.",
         "data": {
-          "name": "Zone name",
+          "name": "Zone name (e.g., Kitchen, Living Room)",
           "camera_entity": "Camera entity",
-          "mode": "Run mode",
-          "runs_per_day": "Runs per day (auto mode)",
-          "provider": "LLM provider",
-          "model": "Model ID",
-          "api_key": "API key",
-          "base_url": "Custom base URL"
+          "personality": "AI Personality",
+          "pickiness": "Pickiness level (1=lenient, 5=perfectionist)",
+          "check_frequency": "Check frequency",
+          "api_key": "Gemini API key"
         }
       }
     },
     "error": {
-      "unknown": "Something went wrong. Check the logs for CleanMe details."
+      "unknown": "Something went wrong. Check the logs for CleanMe details.",
+      "invalid_api_key": "Invalid Gemini API key. Please check your key and try again."
     },
-    "abort": {}
+    "abort": {
+      "already_configured": "This zone is already configured."
+    }
   },
   "options": {
     "step": {
@@ -29,12 +30,10 @@
         "data": {
           "name": "Zone name",
           "camera_entity": "Camera entity",
-          "mode": "Run mode",
-          "runs_per_day": "Runs per day (auto mode)",
-          "provider": "LLM provider",
-          "model": "Model ID",
-          "api_key": "API key",
-          "base_url": "Custom base URL"
+          "personality": "AI Personality",
+          "pickiness": "Pickiness level (1=lenient, 5=perfectionist)",
+          "check_frequency": "Check frequency",
+          "api_key": "Gemini API key"
         }
       }
     }

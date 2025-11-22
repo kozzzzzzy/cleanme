@@ -1,0 +1,116 @@
+request_check:
+  name: Request check
+  description: Trigger an immediate camera snapshot and Gemini analysis for a zone.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to check.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+
+snooze_zone:
+  name: Snooze zone
+  description: Pause automatic checks for a zone for a specified duration.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to snooze.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+    duration_minutes:
+      name: Duration (minutes)
+      description: How long to snooze the zone (1-1440 minutes).
+      required: true
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: minutes
+
+clear_tasks:
+  name: Clear tasks
+  description: Clear all tasks for a zone and mark it as tidy.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to clear tasks for.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+
+add_zone:
+  name: Add zone
+  description: Dynamically add a new zone (advanced users).
+  fields:
+    name:
+      name: Zone name
+      description: Name of the zone (e.g., "Kitchen").
+      required: true
+      example: "Living Room"
+      selector:
+        text:
+    camera_entity:
+      name: Camera entity
+      description: Camera entity ID to use for this zone.
+      required: true
+      example: "camera.living_room"
+      selector:
+        entity:
+          domain: camera
+    personality:
+      name: AI Personality
+      description: The personality style for AI analysis.
+      required: true
+      default: "thorough"
+      selector:
+        select:
+          options:
+            - label: "😊 Chill - Relaxed, supportive"
+              value: "chill"
+            - label: "🤓 Thorough - Detailed, helpful"
+              value: "thorough"
+            - label: "😤 Strict - Critical, demanding"
+              value: "strict"
+            - label: "🤪 Sarcastic - Funny, snarky"
+              value: "sarcastic"
+            - label: "💼 Professional - Formal, clinical"
+              value: "professional"
+    pickiness:
+      name: Pickiness level
+      description: How picky the AI should be (1=lenient, 5=perfectionist).
+      required: true
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: slider
+    check_frequency:
+      name: Check frequency
+      description: How often to automatically check this zone.
+      required: true
+      default: "manual"
+      selector:
+        select:
+          options:
+            - label: "Manual only"
+              value: "manual"
+            - label: "1x daily"
+              value: "1x"
+            - label: "2x daily"
+              value: "2x"
+            - label: "4x daily"
+              value: "4x"
+    api_key:
+      name: Gemini API key
+      description: Your Google Gemini API key.
+      required: true
+      selector:
+        text:
+          type: password

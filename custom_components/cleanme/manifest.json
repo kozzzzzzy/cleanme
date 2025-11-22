@@ -1,11 +1,12 @@
 {
   "domain": "cleanme",
-  "name": "CleanMe – Tidy Task Tracker",
-  "version": "0.1.0",
-  "documentation": "https://github.com/niyisurvey/cleanme",
+  "name": "CleanMe – AI Tidy Task Tracker",
+  "version": "1.0.0",
+  "documentation": "https://github.com/cozbox/cleanme",
+  "issue_tracker": "https://github.com/cozbox/cleanme/issues",
   "dependencies": [],
-  "requirements": [],
-  "codeowners": ["@niyisurvey"],
+  "requirements": ["aiohttp>=3.8.0"],
+  "codeowners": ["@cozbox"],
   "config_flow": true,
   "iot_class": "cloud_polling",
   "loggers": ["custom_components.cleanme"]

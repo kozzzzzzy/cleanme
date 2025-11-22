@@ -2,47 +2,73 @@ DOMAIN = "cleanme"
 
 PLATFORMS = ["sensor", "binary_sensor"]
 
+# Configuration keys
 CONF_NAME = "name"
 CONF_CAMERA_ENTITY = "camera_entity"
-CONF_PROVIDER = "provider"
-CONF_MODEL = "model"
 CONF_API_KEY = "api_key"
-CONF_BASE_URL = "base_url"
-CONF_MODE = "mode"
-CONF_RUNS_PER_DAY = "runs_per_day"
+CONF_PERSONALITY = "personality"
+CONF_PICKINESS = "pickiness"
+CONF_CHECK_FREQUENCY = "check_frequency"
 
-MODE_MANUAL = "manual"
-MODE_AUTO = "auto"
+# Check frequency options
+FREQUENCY_MANUAL = "manual"
+FREQUENCY_1X = "1x"
+FREQUENCY_2X = "2x"
+FREQUENCY_4X = "4x"
 
-PROVIDER_OPENAI = "openai"
-PROVIDER_ANTHROPIC = "anthropic"
-PROVIDER_OPENROUTER = "openrouter"
-PROVIDER_GEMINI = "gemini"
-PROVIDER_CUSTOM = "custom"
-
-PROVIDER_OPTIONS = {
-    PROVIDER_OPENAI: "OpenAI (GPT / Vision)",
-    PROVIDER_ANTHROPIC: "Anthropic (Claude Vision)",
-    PROVIDER_OPENROUTER: "OpenRouter",
-    PROVIDER_GEMINI: "Google Gemini",
-    PROVIDER_CUSTOM: "Custom / Local HTTP endpoint",
+FREQUENCY_OPTIONS = {
+    FREQUENCY_MANUAL: "Manual only",
+    FREQUENCY_1X: "1x daily",
+    FREQUENCY_2X: "2x daily",
+    FREQUENCY_4X: "4x daily",
 }
 
-DEFAULT_MODEL_OPENAI = "gpt-4.1-mini"
-DEFAULT_MODEL_ANTHROPIC = "claude-3-5-sonnet-latest"
-DEFAULT_MODEL_OPENROUTER = "openrouter/auto"
-DEFAULT_MODEL_GEMINI = "gemini-1.5-flash-latest"
+FREQUENCY_TO_RUNS = {
+    FREQUENCY_MANUAL: 0,
+    FREQUENCY_1X: 1,
+    FREQUENCY_2X: 2,
+    FREQUENCY_4X: 4,
+}
 
-RUNS_PER_DAY_OPTIONS = [1, 2, 3, 4]
+# AI Personality options
+PERSONALITY_CHILL = "chill"
+PERSONALITY_THOROUGH = "thorough"
+PERSONALITY_STRICT = "strict"
+PERSONALITY_SARCASTIC = "sarcastic"
+PERSONALITY_PROFESSIONAL = "professional"
 
+PERSONALITY_OPTIONS = {
+    PERSONALITY_CHILL: "😊 Chill - Relaxed, supportive tone",
+    PERSONALITY_THOROUGH: "🤓 Thorough - Detailed, helpful",
+    PERSONALITY_STRICT: "😤 Strict - Critical, demanding",
+    PERSONALITY_SARCASTIC: "🤪 Sarcastic - Funny, snarky",
+    PERSONALITY_PROFESSIONAL: "💼 Professional - Formal, clinical",
+}
+
+# Gemini 3 Pro Preview configuration
+GEMINI_MODEL = "gemini-3-pro-preview"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+# Sensor attributes
 ATTR_TASKS = "tasks"
-ATTR_FULL_TASKS = "full_tasks"
 ATTR_COMMENT = "comment"
-ATTR_LAST_ERROR = "last_error"
+ATTR_FULL_ANALYSIS = "full_analysis"
+ATTR_PERSONALITY = "personality"
+ATTR_PICKINESS = "pickiness"
+ATTR_CAMERA_ENTITY = "camera_entity"
+ATTR_LAST_CHECK = "last_check"
+ATTR_STATUS = "status"
+ATTR_ERROR_MESSAGE = "error_message"
+ATTR_IMAGE_SIZE = "image_size"
+ATTR_API_RESPONSE_TIME = "api_response_time"
+ATTR_SNOOZE_UNTIL = "snooze_until"
 
+# Services
 SERVICE_REQUEST_CHECK = "request_check"
 SERVICE_SNOOZE_ZONE = "snooze_zone"
 SERVICE_CLEAR_TASKS = "clear_tasks"
+SERVICE_ADD_ZONE = "add_zone"
 
+# Service parameters
 ATTR_ZONE = "zone"
 ATTR_DURATION_MINUTES = "duration_minutes"

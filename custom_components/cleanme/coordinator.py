@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Callable
+import logging
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client, event
@@ -11,28 +12,35 @@ from homeassistant.components.camera import async_get_image
 
 from .const import (
     CONF_CAMERA_ENTITY,
-    CONF_MODE,
-    CONF_RUNS_PER_DAY,
-    CONF_PROVIDER,
-    CONF_MODEL,
     CONF_API_KEY,
-    CONF_BASE_URL,
-    MODE_AUTO,
+    CONF_PERSONALITY,
+    CONF_PICKINESS,
+    CONF_CHECK_FREQUENCY,
+    FREQUENCY_TO_RUNS,
+    PERSONALITY_THOROUGH,
 )
-from .llm_client import LLMClient, LLMClientError
+from .gemini_client import GeminiClient, GeminiClientError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
 class CleanMeState:
-    status: str = "unknown"  # clean | messy | error | unknown
-    tasks: List[Dict[str, Any]] = field(default_factory=list)
+    """State data for a CleanMe zone."""
+    tidy: bool = False
+    tasks: List[str] = field(default_factory=list)
     comment: str | None = None
+    severity: str = "medium"
     last_error: str | None = None
     last_checked: datetime | None = None
+    image_size: int = 0
+    api_response_time: float = 0.0
+    full_analysis: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def needs_tidy(self) -> bool:
-        return self.status == "messy" and bool(self.tasks)
+        """Return True if the zone needs tidying."""
+        return not self.tidy and bool(self.tasks)
 
 
 class CleanMeZone:
@@ -44,17 +52,15 @@ class CleanMeZone:
         self._name = name
 
         self._camera_entity_id: str = data[CONF_CAMERA_ENTITY]
-        self._mode: str = data.get(CONF_MODE, MODE_AUTO)
-        self._runs_per_day: int = int(data.get(CONF_RUNS_PER_DAY, 1))
-        if self._runs_per_day < 1:
-            self._runs_per_day = 1
+        self._personality: str = data.get(CONF_PERSONALITY, PERSONALITY_THOROUGH)
+        self._pickiness: int = int(data.get(CONF_PICKINESS, 3))
+        self._check_frequency: str = data.get(CONF_CHECK_FREQUENCY, "manual")
+        
+        # Calculate runs per day from frequency
+        self._runs_per_day: int = FREQUENCY_TO_RUNS.get(self._check_frequency, 0)
 
-        provider = data[CONF_PROVIDER]
-        model = data.get(CONF_MODEL) or ""
         api_key = data.get(CONF_API_KEY) or ""
-        base_url = data.get(CONF_BASE_URL) or ""
-
-        self._llm_client = LLMClient(provider, api_key, model, base_url)
+        self._gemini_client = GeminiClient(api_key)
 
         self._state = CleanMeState()
         self._listeners: list[Callable[[], None]] = []
@@ -68,6 +74,14 @@ class CleanMeZone:
     @property
     def camera_entity_id(self) -> str:
         return self._camera_entity_id
+    
+    @property
+    def personality(self) -> str:
+        return self._personality
+    
+    @property
+    def pickiness(self) -> int:
+        return self._pickiness
 
     @property
     def state(self) -> CleanMeState:
@@ -76,10 +90,14 @@ class CleanMeZone:
     @property
     def needs_tidy(self) -> bool:
         return self._state.needs_tidy
+    
+    @property
+    def snooze_until(self) -> Optional[datetime]:
+        return self._snooze_until
 
     async def async_setup(self) -> None:
-        """Set up timers if in auto mode."""
-        if self._mode == MODE_AUTO:
+        """Set up timers if auto mode is enabled."""
+        if self._runs_per_day > 0:
             self._setup_auto_timer()
 
     @callback
@@ -123,9 +141,9 @@ class CleanMeZone:
         self._snooze_until = utcnow() + timedelta(minutes=minutes)
 
     async def async_clear_tasks(self) -> None:
-        """Clear tasks and mark as clean."""
+        """Clear tasks and mark as tidy."""
         self._state.tasks = []
-        self._state.status = "clean"
+        self._state.tidy = True
         self._state.comment = "Tasks cleared manually."
         self._state.last_error = None
         self._state.last_checked = utcnow()
@@ -134,15 +152,19 @@ class CleanMeZone:
     async def async_request_check(self, reason: str = "manual") -> None:
         """Run a check now (may be called by service or timer)."""
         now = utcnow()
+        
+        # Check if zone is snoozed
         if reason == "auto" and self._snooze_until and now < self._snooze_until:
+            _LOGGER.debug("Zone %s is snoozed until %s", self._name, self._snooze_until)
             return
 
         try:
             image = await async_get_image(self.hass, self._camera_entity_id)
             image_bytes = image.content
         except Exception as err:
+            _LOGGER.error("Failed to capture camera image for %s: %s", self._name, err)
             self._state.last_error = f"Failed to capture camera image: {err}"
-            self._state.status = "error"
+            self._state.tidy = False
             self._state.last_checked = now
             self._notify_listeners()
             return
@@ -150,28 +172,45 @@ class CleanMeZone:
         session = aiohttp_client.async_get_clientsession(self.hass)
 
         try:
-            result = await self._llm_client.analyze_image(
+            result = await self._gemini_client.analyze_image(
                 session=session,
                 image_bytes=image_bytes,
                 room_name=self._name,
+                personality=self._personality,
+                pickiness=self._pickiness,
             )
-        except LLMClientError as err:
+        except GeminiClientError as err:
+            _LOGGER.error("Gemini API error for %s: %s", self._name, err)
             self._state.last_error = str(err)
-            self._state.status = "error"
+            self._state.tidy = False
             self._state.last_checked = now
             self._notify_listeners()
             return
         except Exception as err:
-            self._state.last_error = f"Unexpected LLM error: {err}"
-            self._state.status = "error"
+            _LOGGER.exception("Unexpected error analyzing %s: %s", self._name, err)
+            self._state.last_error = f"Unexpected error: {err}"
+            self._state.tidy = False
             self._state.last_checked = now
             self._notify_listeners()
             return
 
-        self._state.status = result.get("status", "unknown")
+        # Update state with results
+        self._state.tidy = result.get("tidy", False)
         self._state.tasks = result.get("tasks", [])
         self._state.comment = result.get("comment", "")
+        self._state.severity = result.get("severity", "medium")
+        self._state.image_size = result.get("image_size", 0)
+        self._state.api_response_time = result.get("api_response_time", 0.0)
+        self._state.full_analysis = result
         self._state.last_error = None
         self._state.last_checked = now
+
+        _LOGGER.info(
+            "Zone %s analyzed: tidy=%s, tasks=%d, severity=%s",
+            self._name,
+            self._state.tidy,
+            len(self._state.tasks),
+            self._state.severity,
+        )
 
         self._notify_listeners()

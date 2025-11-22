@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorDeviceClass,
@@ -7,7 +9,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
-from .const import DOMAIN
+from .const import DOMAIN, ATTR_PERSONALITY, ATTR_PICKINESS, ATTR_CAMERA_ENTITY, ATTR_LAST_CHECK, ATTR_SNOOZE_UNTIL
 from .coordinator import CleanMeZone
 
 
@@ -18,15 +20,15 @@ async def async_setup_entry(
 ) -> None:
     """Set up CleanMe binary sensors for a config entry."""
     zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([CleanMeNeedsTidyBinarySensor(zone, entry)])
+    async_add_entities([CleanMeTidyBinarySensor(zone, entry)])
 
 
-class CleanMeNeedsTidyBinarySensor(BinarySensorEntity):
-    """Binary flag: does this room need tidying?"""
+class CleanMeTidyBinarySensor(BinarySensorEntity):
+    """Binary sensor: is the room tidy?"""
 
     _attr_has_entity_name = True
-    _attr_name = "Needs tidy"
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_name = "Tidy"
+    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
     _attr_icon = "mdi:broom"
 
     def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
@@ -38,8 +40,24 @@ class CleanMeNeedsTidyBinarySensor(BinarySensorEntity):
 
     @property
     def unique_id(self) -> str:
-        return f"{self._entry_id}_needs_tidy"
+        return f"{self._entry_id}_tidy"
 
     @property
     def is_on(self) -> bool:
-        return self._zone.needs_tidy
+        """Return True if tidy (ON = Green), False if messy (OFF = Red)."""
+        return self._zone.state.tidy
+    
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return additional state attributes."""
+        attrs = {
+            ATTR_PERSONALITY: self._zone.personality,
+            ATTR_PICKINESS: self._zone.pickiness,
+            ATTR_CAMERA_ENTITY: self._zone.camera_entity_id,
+            ATTR_LAST_CHECK: self._zone.state.last_checked.isoformat() if self._zone.state.last_checked else None,
+        }
+        
+        if self._zone.snooze_until:
+            attrs[ATTR_SNOOZE_UNTIL] = self._zone.snooze_until.isoformat()
+        
+        return attrs

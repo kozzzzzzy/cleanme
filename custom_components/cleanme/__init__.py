@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 import logging
+from logging.handlers import RotatingFileHandler
+import os
 
 import voluptuous as vol
 
@@ -34,6 +36,40 @@ from . import dashboard as cleanme_dashboard
 LOGGER = logging.getLogger(__name__)
 
 
+def setup_cleanme_logger(hass):
+    """Setup dedicated CleanMe log file."""
+    logger = logging.getLogger("custom_components.cleanme")
+    
+    # Avoid duplicate handlers
+    if any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
+        return logger
+    
+    logger.setLevel(logging.DEBUG)
+    
+    # File handler for /config/cleanme.log
+    log_file = hass.config.path("cleanme.log")
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=2
+    )
+    file_handler.setLevel(logging.DEBUG)
+    
+    # Format with timestamp
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+    
+    logger.addHandler(file_handler)
+    logger.info("=" * 50)
+    logger.info("CleanMe logging initialized")
+    logger.info("=" * 50)
+    
+    return logger
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up from YAML (not used)."""
     return True
@@ -42,6 +78,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a CleanMe config entry."""
     hass.data.setdefault(DOMAIN, {})
+    
+    setup_cleanme_logger(hass)
+    LOGGER.info("CleanMe: Setting up zone '%s' (entry_id: %s)", entry.title, entry.entry_id)
 
     zone = CleanMeZone(
         hass=hass,
@@ -66,6 +105,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.info("CleanMe: Dashboard generated with %d cards", len(dashboard_config.get("cards", [])))
     except Exception as e:
         LOGGER.error("CleanMe: Failed to generate dashboard: %s", e)
+    
+    # Register the dashboard as a UI panel if not already registered
+    if not hass.data[DOMAIN].get("dashboard_panel_registered"):
+        try:
+            # Create a panel for CleanMe
+            await hass.components.frontend.async_register_built_in_panel(
+                component_name="lovelace",
+                sidebar_title="CleanMe",
+                sidebar_icon="mdi:broom",
+                frontend_url_path="cleanme",
+                require_admin=False,
+                config={"mode": "storage"},
+            )
+            
+            # Store the dashboard for the panel
+            hass.data[DOMAIN]["dashboard_panel_registered"] = True
+            LOGGER.info("CleanMe: Dashboard panel registered in sidebar")
+        except Exception as e:
+            LOGGER.error("CleanMe: Failed to register dashboard panel: %s", e)
 
     return True
 
@@ -83,6 +141,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SNOOZE_ZONE)
         hass.services.async_remove(DOMAIN, SERVICE_CLEAR_TASKS)
         hass.services.async_remove(DOMAIN, SERVICE_ADD_ZONE)
+        
+        # Remove dashboard panel when all zones are unloaded
+        if hass.data[DOMAIN].get("dashboard_panel_registered"):
+            try:
+                await hass.components.frontend.async_remove_panel("cleanme")
+                hass.data[DOMAIN]["dashboard_panel_registered"] = False
+                LOGGER.info("CleanMe: Dashboard panel removed from sidebar")
+            except Exception as e:
+                LOGGER.error("CleanMe: Failed to remove dashboard panel: %s", e)
     else:
         # Regenerate dashboard when zones change
         try:

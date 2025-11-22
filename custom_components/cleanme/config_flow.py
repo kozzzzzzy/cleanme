@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import logging
+import uuid
 
 import voluptuous as vol
 
@@ -58,7 +59,7 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     LOGGER.info("CleanMe: API key validated successfully")
                     name = user_input[CONF_NAME]
-                    await self.async_set_unique_id(f"{DOMAIN}_{name.lower().replace(' ', '_')}")
+                    await self.async_set_unique_id(f"{DOMAIN}_{name.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}")
                     self._abort_if_unique_id_configured()
 
                     LOGGER.info("CleanMe: Creating config entry for zone '%s' with camera '%s'", 

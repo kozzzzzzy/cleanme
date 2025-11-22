@@ -55,7 +55,7 @@ class CleanMeZone:
         self._personality: str = data.get(CONF_PERSONALITY, PERSONALITY_THOROUGH)
         self._pickiness: int = int(data.get(CONF_PICKINESS, 3))
         self._check_frequency: str = data.get(CONF_CHECK_FREQUENCY, "manual")
-        
+
         # Calculate runs per day from frequency
         self._runs_per_day: int = FREQUENCY_TO_RUNS.get(self._check_frequency, 0)
 
@@ -74,11 +74,11 @@ class CleanMeZone:
     @property
     def camera_entity_id(self) -> str:
         return self._camera_entity_id
-    
+
     @property
     def personality(self) -> str:
         return self._personality
-    
+
     @property
     def pickiness(self) -> int:
         return self._pickiness
@@ -90,7 +90,7 @@ class CleanMeZone:
     @property
     def needs_tidy(self) -> bool:
         return self._state.needs_tidy
-    
+
     @property
     def snooze_until(self) -> Optional[datetime]:
         return self._snooze_until
@@ -152,7 +152,7 @@ class CleanMeZone:
     async def async_request_check(self, reason: str = "manual") -> None:
         """Run a check now (may be called by service or timer)."""
         now = utcnow()
-        
+
         # Check if zone is snoozed
         if reason == "auto" and self._snooze_until and now < self._snooze_until:
             _LOGGER.debug("Zone %s is snoozed until %s", self._name, self._snooze_until)

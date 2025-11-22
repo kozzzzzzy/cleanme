@@ -88,21 +88,21 @@ class CleanMeLastCheckSensor(CleanMeBaseSensor):
     def native_value(self):
         """Return the last check timestamp."""
         return self._zone.state.last_checked
-    
+
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Return check status and metadata."""
         attrs = {
             ATTR_STATUS: "success" if not self._zone.state.last_error else "error",
         }
-        
+
         if self._zone.state.last_error:
             attrs[ATTR_ERROR_MESSAGE] = self._zone.state.last_error
-        
+
         if self._zone.state.image_size > 0:
             attrs[ATTR_IMAGE_SIZE] = self._zone.state.image_size
-        
+
         if self._zone.state.api_response_time > 0:
             attrs[ATTR_API_RESPONSE_TIME] = round(self._zone.state.api_response_time, 2)
-        
+
         return attrs

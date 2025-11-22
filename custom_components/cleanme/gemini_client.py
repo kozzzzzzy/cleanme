@@ -40,7 +40,7 @@ class GeminiClient:
     ) -> Dict[str, Any]:
         """
         Analyze room image using Gemini vision model.
-        
+
         Returns dict with:
         - tidy: bool
         - tasks: list of task strings
@@ -48,18 +48,18 @@ class GeminiClient:
         - severity: str (low/medium/high)
         """
         start_time = time.time()
-        
+
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        
+
         prompt = self._build_prompt(room_name, personality, pickiness)
-        
+
         url = f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent"
-        
+
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": self._api_key,
         }
-        
+
         payload = {
             "contents": [
                 {
@@ -81,39 +81,39 @@ class GeminiClient:
                 "maxOutputTokens": 2048,
             },
         }
-        
+
         try:
             async with session.post(url, headers=headers, json=payload, timeout=90) as resp:
                 if resp.status != 200:
                     text = await resp.text()
                     raise GeminiClientError(f"Gemini API HTTP {resp.status}: {text}")
-                
+
                 data = await resp.json()
         except aiohttp.ClientError as err:
             raise GeminiClientError(f"Network error calling Gemini API: {err}") from err
         except Exception as err:
             raise GeminiClientError(f"Unexpected error calling Gemini API: {err}") from err
-        
+
         response_time = time.time() - start_time
-        
+
         # Parse Gemini response
         try:
             candidates = data.get("candidates", [])
             if not candidates:
                 raise ValueError("No candidates in response")
-            
+
             first = candidates[0]
             parts = first.get("content", {}).get("parts", [])
-            
+
             text_block = None
             for part in parts:
                 if "text" in part:
                     text_block = part["text"]
                     break
-            
+
             if not text_block:
                 raise ValueError("No text content in response")
-            
+
             # Extract JSON from response (handle markdown code blocks)
             text_block = text_block.strip()
             if text_block.startswith("```json"):
@@ -122,25 +122,25 @@ class GeminiClient:
                 text_block = text_block[3:]
             if text_block.endswith("```"):
                 text_block = text_block[:-3]
-            
+
             parsed = json.loads(text_block.strip())
-            
+
         except Exception as err:
             _LOGGER.error("Failed to parse Gemini response: %s", data)
             raise GeminiClientError(f"Malformed Gemini response: {err}") from err
-        
+
         # Validate and normalize response
         result = self._validate_response(parsed)
         result["api_response_time"] = response_time
         result["image_size"] = len(image_bytes)
-        
+
         return result
 
     def _build_prompt(self, room_name: str, personality: str, pickiness: int) -> str:
         """Build the analysis prompt with personality and pickiness instructions."""
         personality_instructions = self._get_personality_instructions(personality)
         pickiness_instructions = self._get_pickiness_instructions(pickiness)
-        
+
         return f"""You are analyzing a room for tidiness using image analysis.
 
 Room type: {room_name}
@@ -195,33 +195,33 @@ Do not include any markdown formatting, just raw JSON."""
         """Validate and normalize the API response."""
         if not isinstance(data, dict):
             raise GeminiClientError("Response must be a JSON object")
-        
+
         # Validate tidy field
         tidy = data.get("tidy")
         if not isinstance(tidy, bool):
             raise GeminiClientError(f"Invalid 'tidy' field: {tidy}")
-        
+
         # Validate tasks field
         tasks = data.get("tasks", [])
         if not isinstance(tasks, list):
             raise GeminiClientError("'tasks' must be a list")
-        
+
         # Clean and validate tasks
         cleaned_tasks = []
         for task in tasks:
             if isinstance(task, str) and task.strip():
                 cleaned_tasks.append(task.strip())
-        
+
         # Validate comment
         comment = data.get("comment", "")
         if not isinstance(comment, str):
             comment = str(comment)
-        
+
         # Validate severity
         severity = data.get("severity", "medium")
         if severity not in ("low", "medium", "high"):
             severity = "medium"
-        
+
         return {
             "tidy": tidy,
             "tasks": cleaned_tasks,
@@ -232,11 +232,11 @@ Do not include any markdown formatting, just raw JSON."""
     async def validate_api_key(self, session: aiohttp.ClientSession) -> bool:
         """Validate that the API key works."""
         url = f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}"
-        
+
         headers = {
             "x-goog-api-key": self._api_key,
         }
-        
+
         try:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 return resp.status == 200

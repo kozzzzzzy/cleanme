@@ -46,7 +46,7 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
     def is_on(self) -> bool:
         """Return True if tidy (ON = Green), False if messy (OFF = Red)."""
         return self._zone.state.tidy
-    
+
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         """Return additional state attributes."""
@@ -56,8 +56,8 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
             ATTR_CAMERA_ENTITY: self._zone.camera_entity_id,
             ATTR_LAST_CHECK: self._zone.state.last_checked.isoformat() if self._zone.state.last_checked else None,
         }
-        
+
         if self._zone.snooze_until:
             attrs[ATTR_SNOOZE_UNTIL] = self._zone.snooze_until.isoformat()
-        
+
         return attrs

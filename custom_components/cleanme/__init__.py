@@ -116,7 +116,7 @@ def _register_services(hass: HomeAssistant) -> None:
             CONF_CHECK_FREQUENCY: call.data.get(CONF_CHECK_FREQUENCY, "manual"),
             CONF_API_KEY: call.data[CONF_API_KEY],
         }
-        
+
         # Create a new config entry programmatically
         await hass.config_entries.flow.async_init(
             DOMAIN,

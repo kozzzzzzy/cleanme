@@ -19,29 +19,29 @@ from .const import DOMAIN
 def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     """
     Generate a complete Lovelace dashboard configuration for all CleanMe zones.
-    
+
     Returns a dashboard configuration dict that can be used to create
     a dashboard in Home Assistant.
     """
     zones_data = hass.data.get(DOMAIN, {})
-    
+
     # Get all zone names
     zone_names = []
     for zone in zones_data.values():
         if hasattr(zone, 'name'):
             zone_names.append(zone.name)
-    
+
     # Build cards for each zone
     cards = []
-    
+
     for zone_name in zone_names:
         zone_card = _create_zone_card(zone_name)
         cards.append(zone_card)
-    
+
     # Add "Add Zone" button card at the end
     add_zone_card = _create_add_zone_card()
     cards.append(add_zone_card)
-    
+
     # Build the complete dashboard configuration
     dashboard_config = {
         "title": "🏠 Tidy Tracker",
@@ -50,7 +50,7 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
         "badges": [],
         "cards": cards,
     }
-    
+
     return dashboard_config
 
 
@@ -58,7 +58,7 @@ def _create_zone_card(zone_name: str) -> Dict[str, Any]:
     """Create a card for a single zone."""
     # Sanitize zone name for entity IDs
     zone_id = zone_name.lower().replace(" ", "_")
-    
+
     return {
         "type": "custom:mushroom-template-card",
         "primary": f"🧹 {zone_name}",
@@ -86,7 +86,7 @@ def _create_zone_card(zone_name: str) -> Dict[str, Any]:
 def _create_zone_details_card(zone_name: str) -> Dict[str, Any]:
     """Create a detailed card with tasks and action buttons for a zone."""
     zone_id = zone_name.lower().replace(" ", "_")
-    
+
     return {
         "type": "vertical-stack",
         "cards": [
@@ -216,26 +216,26 @@ def _create_add_zone_card() -> Dict[str, Any]:
 def create_simple_cards_list(hass: HomeAssistant) -> List[Dict[str, Any]]:
     """
     Create a simple list of cards for all zones.
-    
+
     This is useful for users who want to add CleanMe cards to their
     existing dashboards rather than using the auto-generated one.
     """
     zones_data = hass.data.get(DOMAIN, {})
-    
+
     cards = []
-    
+
     for zone in zones_data.values():
         if hasattr(zone, 'name'):
             card = _create_zone_details_card(zone.name)
             cards.append(card)
-    
+
     return cards
 
 
 def get_required_custom_cards() -> List[str]:
     """
     Return list of custom cards required for the dashboard.
-    
+
     These should be installed via HACS for the dashboard to work properly.
     """
     return [

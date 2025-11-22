@@ -46,7 +46,7 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 api_key = user_input[CONF_API_KEY]
                 session = aiohttp_client.async_get_clientsession(self.hass)
                 client = GeminiClient(api_key)
-                
+
                 is_valid = await client.validate_api_key(session)
                 if not is_valid:
                     errors["base"] = "invalid_api_key"
@@ -104,21 +104,21 @@ class CleanMeOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             try:
                 # Validate API key if changed
                 api_key = user_input[CONF_API_KEY]
                 old_api_key = self._entry.data.get(CONF_API_KEY, "")
-                
+
                 if api_key != old_api_key:
                     session = aiohttp_client.async_get_clientsession(self.hass)
                     client = GeminiClient(api_key)
-                    
+
                     is_valid = await client.validate_api_key(session)
                     if not is_valid:
                         errors["base"] = "invalid_api_key"
-                
+
                 if not errors:
                     # Update the config entry data
                     self.hass.config_entries.async_update_entry(

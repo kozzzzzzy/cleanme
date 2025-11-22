@@ -62,6 +62,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     LOGGER.info("CleanMe: Registering dashboard for zone '%s'", entry.title)
     try:
         dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
+        # Ensure domain data is initialized before storing dashboard config
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
         hass.data[DOMAIN]["dashboard_config"] = dashboard_config
         LOGGER.info("CleanMe: Dashboard generated with %d cards", len(dashboard_config.get("cards", [])))
     except Exception as e:
@@ -87,6 +90,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Regenerate dashboard when zones change
         try:
             dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
+            # Ensure domain data is initialized before storing dashboard config
+            if DOMAIN not in hass.data:
+                hass.data[DOMAIN] = {}
             hass.data[DOMAIN]["dashboard_config"] = dashboard_config
             LOGGER.info("CleanMe: Dashboard updated after zone removal")
         except Exception as e:
@@ -97,7 +103,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 def _find_zone_by_name(hass: HomeAssistant, zone_name: str) -> CleanMeZone | None:
     for zone in hass.data.get(DOMAIN, {}).values():
-        if isinstance(zone, CleanMeZone) and zone.name == zone_name:
+        if isinstance(zone, CleanMeZone) and hasattr(zone, 'name') and zone.name == zone_name:
             return zone
     return None
 

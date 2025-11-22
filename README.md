@@ -159,7 +159,7 @@ data:
 
 ## 🎨 Dashboard
 
-CleanMe includes a dashboard generator that creates beautiful cards for each zone. The dashboard shows:
+CleanMe automatically creates a beautiful dashboard for all your zones! The dashboard shows:
 
 - Zone status with color-coded indicators
 - Current task count
@@ -167,13 +167,42 @@ CleanMe includes a dashboard generator that creates beautiful cards for each zon
 - Quick action buttons (Check Now, Mark Done, Snooze)
 - Last check timestamp
 
-### Using Pre-Built Dashboard Cards
+### 🚀 Quick Dashboard Setup
 
-The integration provides helper functions to generate dashboard configurations. You can use the included `dashboard.py` module to create cards programmatically.
+**For most users (Storage Mode):**
+1. Install CleanMe via HACS
+2. Install required custom cards: [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) and [Card Mod](https://github.com/thomasloven/lovelace-card-mod)
+3. Add your first zone via Settings → Integrations
+4. Check your sidebar - "CleanMe" dashboard automatically appears! 🎉
 
-### Manual Dashboard Setup
+**For YAML mode users:**
+Add to `configuration.yaml`:
+```yaml
+lovelace:
+  dashboards:
+    cleanme-dashboard:
+      mode: yaml
+      title: CleanMe Tidy Tracker
+      icon: mdi:broom
+      show_in_sidebar: true
+      filename: dashboards/cleanme.yaml
+```
 
-Create cards like this:
+### 📚 Complete Dashboard Guide
+
+**Need help?** See the complete dashboard setup guide:
+- **[QUICK_START.md](QUICK_START.md)** - 5-minute setup guide
+- **[DASHBOARD_SETUP.md](DASHBOARD_SETUP.md)** - Detailed guide for all configuration modes
+
+### Dashboard Files Generated
+
+The integration automatically creates:
+- `/config/dashboards/cleanme.yaml` - Auto-generated dashboard YAML
+- Cards update automatically when you add/remove zones
+
+### Manual Card Example
+
+If you want to manually create cards:
 
 ```yaml
 type: custom:mushroom-template-card
@@ -193,6 +222,13 @@ icon_color: >
   {% endif %}
 tap_action:
   action: more-info
+```
+
+### Regenerate Dashboard
+
+To manually regenerate the dashboard YAML:
+```yaml
+service: cleanme.regenerate_dashboard
 ```
 
 ## 🤖 Automation Examples

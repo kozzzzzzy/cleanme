@@ -1,0 +1,58 @@
+# Example configuration.yaml snippet for CleanMe dashboard
+# 
+# INSTALLATION INSTRUCTIONS for YAML Dashboard Mode:
+# 1. Add this section to your configuration.yaml
+# 2. Restart Home Assistant
+# 3. CleanMe dashboard will be available at /lovelace/cleanme
+
+# If you want to use YAML mode for dashboards, add this to configuration.yaml:
+lovelace:
+  mode: yaml
+  # Or use 'storage' mode (default) to edit dashboards in the UI
+  
+  # For YAML mode, you can reference external dashboard files:
+  dashboards:
+    cleanme-dashboard:
+      mode: yaml
+      title: CleanMe Tidy Tracker
+      icon: mdi:broom
+      show_in_sidebar: true
+      filename: dashboards/cleanme.yaml
+
+# Alternatively, for storage mode users:
+# The CleanMe integration will automatically create a dashboard panel
+# in your sidebar when you add your first zone. No configuration needed!
+
+# The integration will automatically create a file at:
+# /config/dashboards/cleanme.yaml
+# You can reference this file or copy its contents to your own dashboard
+
+# ============================================
+# Additional CleanMe Configuration Examples
+# ============================================
+
+# Optional: Automation to regenerate dashboard when zones change
+automation:
+  - alias: "Regenerate CleanMe Dashboard"
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: event
+        event_type: service_registered
+        event_data:
+          domain: cleanme
+    action:
+      - service: cleanme.regenerate_dashboard
+        data: {}
+
+# Optional: Script to export dashboard YAML
+script:
+  export_cleanme_dashboard:
+    alias: "Export CleanMe Dashboard"
+    sequence:
+      - service: cleanme.regenerate_dashboard
+        data: {}
+      - service: persistent_notification.create
+        data:
+          title: "Dashboard Exported"
+          message: "CleanMe dashboard exported to /config/dashboards/cleanme.yaml"

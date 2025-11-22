@@ -1,0 +1,95 @@
+# CleanMe Dashboard - Auto-generated example
+# This file shows what the CleanMe integration generates automatically
+# at /config/dashboards/cleanme.yaml when zones are configured
+#
+# This is a complete Lovelace view that can be:
+# 1. Referenced in configuration.yaml (see examples/configuration.yaml)
+# 2. Copied into your ui-lovelace.yaml
+# 3. Used via the auto-generated sidebar panel
+
+title: 🏠 Tidy Tracker
+path: cleanme
+icon: mdi:broom
+badges: []
+cards:
+  # Example: Kitchen Zone Card
+  - type: custom:mushroom-template-card
+    primary: 🧹 Kitchen
+    secondary: "{{ state_attr('sensor.kitchen_tasks', 'comment') }}"
+    icon: >
+      {% if is_state('binary_sensor.kitchen_tidy', 'on') %}
+      mdi:check-circle
+      {% else %}
+      mdi:alert-circle
+      {% endif %}
+    icon_color: >
+      {% if is_state('binary_sensor.kitchen_tidy', 'on') %}
+      green
+      {% else %}
+      red
+      {% endif %}
+    badge_icon: mdi:format-list-checkbox
+    badge_color: >
+      {% if states('sensor.kitchen_tasks') | int > 0 %}
+      orange
+      {% else %}
+      green
+      {% endif %}
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    card_mod:
+      style: |
+        ha-card {
+          border-left: 4px solid {% if is_state('binary_sensor.kitchen_tidy', 'on') %}var(--success-color){% else %}var(--error-color){% endif %};
+        }
+
+  # Example: Living Room Zone Card
+  - type: custom:mushroom-template-card
+    primary: 🧹 Living Room
+    secondary: "{{ state_attr('sensor.living_room_tasks', 'comment') }}"
+    icon: >
+      {% if is_state('binary_sensor.living_room_tidy', 'on') %}
+      mdi:check-circle
+      {% else %}
+      mdi:alert-circle
+      {% endif %}
+    icon_color: >
+      {% if is_state('binary_sensor.living_room_tidy', 'on') %}
+      green
+      {% else %}
+      red
+      {% endif %}
+    badge_icon: mdi:format-list-checkbox
+    badge_color: >
+      {% if states('sensor.living_room_tasks') | int > 0 %}
+      orange
+      {% else %}
+      green
+      {% endif %}
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    card_mod:
+      style: |
+        ha-card {
+          border-left: 4px solid {% if is_state('binary_sensor.living_room_tidy', 'on') %}var(--success-color){% else %}var(--error-color){% endif %};
+        }
+
+  # Add Zone Button
+  - type: custom:mushroom-template-card
+    primary: + Add Another Zone
+    secondary: Configure a new room to track
+    icon: mdi:plus-circle
+    icon_color: blue
+    tap_action:
+      action: navigate
+      navigation_path: /config/integrations/integration/cleanme
+    card_mod:
+      style: |
+        ha-card {
+          border: 2px dashed var(--primary-color);
+          opacity: 0.8;
+        }

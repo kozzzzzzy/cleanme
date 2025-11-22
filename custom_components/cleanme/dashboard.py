@@ -15,6 +15,12 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
+# Dashboard constants
+DASHBOARD_TITLE = "🏠 Tidy Tracker"
+DASHBOARD_ICON = "mdi:broom"
+DASHBOARD_PATH = "cleanme"
+DASHBOARD_BADGES: List[Any] = []
+
 
 def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     """
@@ -26,6 +32,9 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     zones_data = hass.data.get(DOMAIN, {})
 
     # Get all zone names
+    # Note: hass.data[DOMAIN] contains both CleanMeZone objects and metadata keys
+    # (like "dashboard_config", "dashboard_panel_registered"), so we use hasattr
+    # to filter for actual zone objects that have a 'name' attribute
     zone_names = []
     for zone in zones_data.values():
         if hasattr(zone, 'name'):
@@ -44,10 +53,10 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
 
     # Build the complete dashboard configuration
     dashboard_config = {
-        "title": "🏠 Tidy Tracker",
-        "icon": "mdi:broom",
-        "path": "cleanme",
-        "badges": [],
+        "title": DASHBOARD_TITLE,
+        "icon": DASHBOARD_ICON,
+        "path": DASHBOARD_PATH,
+        "badges": DASHBOARD_BADGES,
         "cards": cards,
     }
 
@@ -242,3 +251,90 @@ def get_required_custom_cards() -> List[str]:
         "mushroom",  # custom:mushroom-template-card
         "card-mod",  # For styling
     ]
+
+
+def create_basic_entities_card(zone_name: str) -> Dict[str, Any]:
+    """
+    Create a basic entities card that doesn't require custom cards.
+    
+    This is a fallback for users who haven't installed Mushroom cards yet.
+    """
+    zone_id = zone_name.lower().replace(" ", "_")
+    
+    return {
+        "type": "entities",
+        "title": f"🧹 {zone_name}",
+        "entities": [
+            {
+                "entity": f"binary_sensor.{zone_id}_tidy",
+                "name": "Status",
+            },
+            {
+                "entity": f"sensor.{zone_id}_tasks",
+                "name": "Task Count",
+            },
+            {
+                "entity": f"sensor.{zone_id}_last_check",
+                "name": "Last Check",
+            },
+            {
+                "type": "button",
+                "name": "Check Now",
+                "action_name": "Check",
+                "tap_action": {
+                    "action": "call-service",
+                    "service": "cleanme.request_check",
+                    "service_data": {
+                        "zone": zone_name,
+                    },
+                },
+            },
+            {
+                "type": "button",
+                "name": "Mark Done",
+                "action_name": "Done",
+                "tap_action": {
+                    "action": "call-service",
+                    "service": "cleanme.clear_tasks",
+                    "service_data": {
+                        "zone": zone_name,
+                    },
+                },
+            },
+        ],
+    }
+
+
+def generate_basic_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
+    """
+    Generate a basic dashboard configuration without custom cards.
+    
+    This is a fallback for users who haven't installed Mushroom cards.
+    """
+    zones_data = hass.data.get(DOMAIN, {})
+    
+    # Get all zone names
+    # Note: hass.data[DOMAIN] contains both CleanMeZone objects and metadata keys,
+    # so we use hasattr to filter for actual zone objects
+    zone_names = []
+    for zone in zones_data.values():
+        if hasattr(zone, 'name'):
+            zone_names.append(zone.name)
+    
+    # Build basic cards for each zone
+    cards = []
+    
+    for zone_name in zone_names:
+        zone_card = create_basic_entities_card(zone_name)
+        cards.append(zone_card)
+    
+    # Build the complete dashboard configuration
+    dashboard_config = {
+        "title": DASHBOARD_TITLE,
+        "icon": DASHBOARD_ICON,
+        "path": DASHBOARD_PATH,
+        "badges": DASHBOARD_BADGES,
+        "cards": cards,
+    }
+    
+    return dashboard_config

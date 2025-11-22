@@ -1,0 +1,53 @@
+# Example ui-lovelace.yaml configuration for CleanMe
+# This file is for users who use YAML mode for their Lovelace configuration
+# 
+# INSTALLATION INSTRUCTIONS:
+# 1. Copy this file to your Home Assistant config directory as ui-lovelace.yaml
+#    OR merge the content below into your existing ui-lovelace.yaml
+# 2. Restart Home Assistant
+# 3. The CleanMe dashboard will appear in your sidebar
+
+title: Home
+views:
+  # Your existing views go here...
+  
+  # CleanMe Dashboard View
+  - title: 🏠 Tidy Tracker
+    path: cleanme
+    icon: mdi:broom
+    badges: []
+    cards:
+      # This is a placeholder - cards will be generated automatically
+      # by the CleanMe integration based on your configured zones
+      
+      # Example card structure (will be auto-generated per zone):
+      # - type: custom:mushroom-template-card
+      #   primary: 🧹 Kitchen
+      #   secondary: "{{ state_attr('sensor.kitchen_tasks', 'comment') }}"
+      #   icon: >
+      #     {% if is_state('binary_sensor.kitchen_tidy', 'on') %}
+      #     mdi:check-circle
+      #     {% else %}
+      #     mdi:alert-circle
+      #     {% endif %}
+      #   icon_color: >
+      #     {% if is_state('binary_sensor.kitchen_tidy', 'on') %}
+      #     green
+      #     {% else %}
+      #     red
+      #     {% endif %}
+      
+      - type: markdown
+        content: |
+          ## 🧹 CleanMe Dashboard
+          
+          **To see your zone cards here:**
+          
+          1. Check that CleanMe zones are configured in Settings → Devices & Services
+          2. Look at `/config/dashboards/cleanme.yaml` for auto-generated cards
+          3. Copy the cards from that file to this location
+          4. Or use the dashboard panel in the sidebar (if in storage mode)
+          
+          **Required custom cards:**
+          - Mushroom Cards (install via HACS)
+          - Card Mod (install via HACS)

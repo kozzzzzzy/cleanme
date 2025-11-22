@@ -210,11 +210,11 @@ async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
         
         # Create dashboards directory if it doesn't exist
         if not os.path.exists(dashboards_dir):
-            os.makedirs(dashboards_dir)
+            os.makedirs(dashboards_dir, mode=0o755)
         
         yaml_file = os.path.join(dashboards_dir, "cleanme.yaml")
         
-        with open(yaml_file, 'w') as f:
+        with open(yaml_file, 'w', encoding='utf-8') as f:
             yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
         
         LOGGER.info("CleanMe: Dashboard YAML written to %s", yaml_file)
@@ -293,6 +293,7 @@ def _register_services(hass: HomeAssistant) -> None:
         
         # Update the entry
         hass.config_entries.async_update_entry(entry, data=updated_data)
+        # Reload is required for the zone coordinator to pick up new config
         await hass.config_entries.async_reload(entry.entry_id)
         
         # Regenerate dashboard YAML

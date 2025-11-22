@@ -1,0 +1,33 @@
+# Lovelace Resources Configuration for CleanMe
+# Add this to your configuration.yaml to load required custom cards
+
+# METHOD 1: If you're using YAML mode for Lovelace
+# Add these resources to your configuration.yaml:
+
+lovelace:
+  mode: yaml
+  resources:
+    # Mushroom Cards - Required for CleanMe dashboard
+    - url: /hacsfiles/lovelace-mushroom/mushroom.js
+      type: module
+    
+    # Card Mod - Required for custom styling
+    - url: /hacsfiles/lovelace-card-mod/card-mod.js
+      type: module
+
+# METHOD 2: If you're using Storage mode (UI mode)
+# Resources are managed in the UI:
+# 1. Go to Settings → Dashboards
+# 2. Click the three dots menu (⋮) in the top right
+# 3. Select "Resources"
+# 4. Add each resource:
+#    - URL: /hacsfiles/lovelace-mushroom/mushroom.js
+#      Type: JavaScript Module
+#    - URL: /hacsfiles/lovelace-card-mod/card-mod.js
+#      Type: JavaScript Module
+
+# NOTE: Install these custom cards via HACS first:
+# - Mushroom Cards: Search "Mushroom" in HACS → Frontend
+# - Card Mod: Search "Card Mod" in HACS → Frontend
+
+# After adding resources, clear browser cache and reload Home Assistant

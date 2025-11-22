@@ -109,9 +109,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register the dashboard as a UI panel if not already registered
     if not hass.data[DOMAIN].get("dashboard_panel_registered"):
         try:
-            # Register the dashboard as a Lovelace view
-            from homeassistant.components import lovelace
-            
             # Create a panel for CleanMe
             await hass.components.frontend.async_register_built_in_panel(
                 component_name="lovelace",

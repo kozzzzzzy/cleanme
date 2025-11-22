@@ -114,3 +114,79 @@ add_zone:
       selector:
         text:
           type: password
+
+update_zone_config:
+  name: Update zone configuration
+  description: Update settings for an existing zone.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to update.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+    pickiness:
+      name: Pickiness level
+      description: How picky the AI should be (1=lenient, 5=perfectionist).
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 5
+          mode: slider
+    personality:
+      name: AI Personality
+      description: The personality style for AI analysis.
+      required: false
+      selector:
+        select:
+          options:
+            - label: "😊 Chill - Relaxed, supportive"
+              value: "chill"
+            - label: "🤓 Thorough - Detailed, helpful"
+              value: "thorough"
+            - label: "😤 Strict - Critical, demanding"
+              value: "strict"
+            - label: "🤪 Sarcastic - Funny, snarky"
+              value: "sarcastic"
+            - label: "💼 Professional - Formal, clinical"
+              value: "professional"
+    check_frequency:
+      name: Check frequency
+      description: How often to automatically check this zone.
+      required: false
+      selector:
+        select:
+          options:
+            - label: "Manual only"
+              value: "manual"
+            - label: "1x daily"
+              value: "1x"
+            - label: "2x daily"
+              value: "2x"
+            - label: "4x daily"
+              value: "4x"
+    camera_entity:
+      name: Camera entity
+      description: Camera entity ID to use for this zone.
+      required: false
+      selector:
+        entity:
+          domain: camera
+
+delete_zone:
+  name: Delete zone
+  description: Completely remove a zone from CleanMe.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to delete.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+
+regenerate_dashboard:
+  name: Regenerate dashboard
+  description: Manually regenerate the CleanMe dashboard YAML file.

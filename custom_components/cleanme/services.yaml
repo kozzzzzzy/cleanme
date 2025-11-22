@@ -189,4 +189,9 @@ delete_zone:
 
 regenerate_dashboard:
   name: Regenerate dashboard
-  description: Manually regenerate the CleanMe dashboard YAML file.
+  description: Manually regenerate the CleanMe dashboard YAML file at /config/dashboards/cleanme.yaml.
+
+export_basic_dashboard:
+  name: Export basic dashboard
+  description: Export a basic dashboard without custom cards (Mushroom/Card Mod) to /config/dashboards/cleanme-basic.yaml. Useful for users who haven't installed custom cards yet.
+

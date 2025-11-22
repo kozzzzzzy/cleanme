@@ -160,6 +160,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, "update_zone_config")
         hass.services.async_remove(DOMAIN, "delete_zone")
         hass.services.async_remove(DOMAIN, "regenerate_dashboard")
+        hass.services.async_remove(DOMAIN, "export_basic_dashboard")
         
         # Remove dashboard panel when all zones are unloaded
         if hass.data[DOMAIN].get("dashboard_panel_registered"):
@@ -332,6 +333,41 @@ def _register_services(hass: HomeAssistant) -> None:
         await _regenerate_dashboard_yaml(hass)
         LOGGER.info("CleanMe: Dashboard YAML regenerated")
 
+    async def handle_export_basic_dashboard(call: ServiceCall) -> None:
+        """Export a basic dashboard without custom cards."""
+        if not YAML_AVAILABLE:
+            LOGGER.error("CleanMe: PyYAML not available, cannot export dashboard")
+            return
+        
+        try:
+            # Generate basic dashboard config
+            dashboard_config = cleanme_dashboard.generate_basic_dashboard_config(hass)
+            
+            # Build full Lovelace view YAML
+            yaml_content = {
+                "title": dashboard_config["title"],
+                "path": dashboard_config["path"],
+                "icon": dashboard_config["icon"],
+                "badges": [],
+                "cards": dashboard_config["cards"]
+            }
+            
+            # Write to /config/dashboards/cleanme-basic.yaml
+            dashboards_dir = hass.config.path("dashboards")
+            
+            # Create dashboards directory if it doesn't exist
+            if not os.path.exists(dashboards_dir):
+                os.makedirs(dashboards_dir, mode=0o755)
+            
+            yaml_file = os.path.join(dashboards_dir, "cleanme-basic.yaml")
+            
+            with open(yaml_file, 'w', encoding='utf-8') as f:
+                yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            
+            LOGGER.info("CleanMe: Basic dashboard YAML written to %s", yaml_file)
+        except Exception as e:
+            LOGGER.error("CleanMe: Failed to write basic dashboard YAML: %s", e)
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_REQUEST_CHECK,
@@ -402,5 +438,12 @@ def _register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         "regenerate_dashboard",
         handle_regenerate_dashboard,
+        vol.Schema({}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "export_basic_dashboard",
+        handle_export_basic_dashboard,
         vol.Schema({}),
     )

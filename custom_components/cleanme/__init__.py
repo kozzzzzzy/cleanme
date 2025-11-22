@@ -120,6 +120,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register the dashboard as a UI panel if not already registered
     if not hass.data[DOMAIN].get("dashboard_panel_registered"):
         try:
+            # Check if frontend component is available
+            if not hasattr(hass.components, "frontend"):
+                LOGGER.warning("CleanMe: Frontend component not available, skipping dashboard panel registration")
+                return True
+            
             # Create a panel for CleanMe
             await hass.components.frontend.async_register_built_in_panel(
                 component_name="lovelace",
@@ -159,9 +164,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Remove dashboard panel when all zones are unloaded
         if hass.data[DOMAIN].get("dashboard_panel_registered"):
             try:
-                await hass.components.frontend.async_remove_panel("cleanme")
+                # Check if frontend component is available
+                if hasattr(hass.components, "frontend"):
+                    await hass.components.frontend.async_remove_panel("cleanme")
+                    LOGGER.info("CleanMe: Dashboard panel removed from sidebar")
+                else:
+                    LOGGER.warning("CleanMe: Frontend component not available, skipping dashboard panel removal")
+                
                 hass.data[DOMAIN]["dashboard_panel_registered"] = False
-                LOGGER.info("CleanMe: Dashboard panel removed from sidebar")
             except Exception as e:
                 LOGGER.error("CleanMe: Failed to remove dashboard panel: %s", e)
     else:

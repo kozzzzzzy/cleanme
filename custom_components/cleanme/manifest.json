@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "documentation": "https://github.com/cozbox/cleanme",
   "issue_tracker": "https://github.com/cozbox/cleanme/issues",
-  "dependencies": [],
+  "dependencies": ["frontend"],
   "requirements": ["aiohttp>=3.8.0"],
   "codeowners": ["@cozbox"],
   "config_flow": true,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -8,8 +8,24 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util.dt import as_local
 
-from .const import DOMAIN, ATTR_PERSONALITY, ATTR_PICKINESS, ATTR_CAMERA_ENTITY, ATTR_LAST_CHECK, ATTR_SNOOZE_UNTIL
+from .const import (
+    DOMAIN,
+    ATTR_PERSONALITY,
+    ATTR_PICKINESS,
+    ATTR_CAMERA_ENTITY,
+    ATTR_LAST_CHECK,
+    ATTR_SNOOZE_UNTIL,
+    ATTR_ZONE_COUNT,
+    ATTR_DASHBOARD_PATH,
+    ATTR_DASHBOARD_LAST_GENERATED,
+    ATTR_DASHBOARD_LAST_ERROR,
+    ATTR_READY,
+    SIGNAL_SYSTEM_STATE_UPDATED,
+    SIGNAL_ZONE_STATE_UPDATED,
+)
 from .coordinator import CleanMeZone
 
 
@@ -20,7 +36,15 @@ async def async_setup_entry(
 ) -> None:
     """Set up CleanMe binary sensors for a config entry."""
     zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([CleanMeTidyBinarySensor(zone, entry)])
+
+    entities = [CleanMeTidyBinarySensor(zone, entry)]
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if not domain_data.get("ready_entity_added"):
+        entities.append(CleanMeReadyBinarySensor(hass))
+        domain_data["ready_entity_added"] = True
+
+    async_add_entities(entities)
 
 
 class CleanMeTidyBinarySensor(BinarySensorEntity):
@@ -61,3 +85,72 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
             attrs[ATTR_SNOOZE_UNTIL] = self._zone.snooze_until.isoformat()
 
         return attrs
+
+
+class CleanMeReadyBinarySensor(BinarySensorEntity):
+    """Binary sensor showing CleanMe overall readiness."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Ready"
+    _attr_icon = "mdi:check-circle"
+    _attr_unique_id = "cleanme_ready"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+        self._unsubscribers: list[Callable[[], None]] = []
+
+    async def async_added_to_hass(self) -> None:
+        self._unsubscribers.append(
+            async_dispatcher_connect(
+                self._hass, SIGNAL_SYSTEM_STATE_UPDATED, self.async_write_ha_state
+            )
+        )
+        self._unsubscribers.append(
+            async_dispatcher_connect(
+                self._hass, SIGNAL_ZONE_STATE_UPDATED, self.async_write_ha_state
+            )
+        )
+
+        self.async_write_ha_state()
+
+    async def async_will_remove_from_hass(self) -> None:
+        while self._unsubscribers:
+            unsub = self._unsubscribers.pop()
+            unsub()
+
+    @property
+    def is_on(self) -> bool:
+        zones = [
+            zone
+            for zone in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(zone, CleanMeZone)
+        ]
+        dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
+
+        has_dashboard = bool(dashboard_state.get(ATTR_DASHBOARD_PATH))
+        healthy = dashboard_state.get(ATTR_DASHBOARD_STATUS) not in {"error", "unavailable"}
+
+        return bool(zones and has_dashboard and healthy)
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
+        zones = [
+            zone
+            for zone in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(zone, CleanMeZone)
+        ]
+
+        last_generated = dashboard_state.get(ATTR_DASHBOARD_LAST_GENERATED)
+        if last_generated:
+            last_generated = as_local(last_generated).isoformat()
+
+        ready = self.is_on
+
+        return {
+            ATTR_ZONE_COUNT: len(zones),
+            ATTR_DASHBOARD_PATH: dashboard_state.get(ATTR_DASHBOARD_PATH),
+            ATTR_DASHBOARD_LAST_GENERATED: last_generated,
+            ATTR_DASHBOARD_LAST_ERROR: dashboard_state.get(ATTR_DASHBOARD_LAST_ERROR),
+            ATTR_READY: ready,
+        }

@@ -74,3 +74,17 @@ SERVICE_ADD_ZONE = "add_zone"
 # Service parameters
 ATTR_ZONE = "zone"
 ATTR_DURATION_MINUTES = "duration_minutes"
+
+# Dashboard/status attributes
+ATTR_ZONE_COUNT = "zone_count"
+ATTR_DASHBOARD_PATH = "dashboard_path"
+ATTR_DASHBOARD_LAST_GENERATED = "dashboard_last_generated"
+ATTR_DASHBOARD_LAST_ERROR = "dashboard_last_error"
+ATTR_DASHBOARD_PANEL = "dashboard_panel"
+ATTR_DASHBOARD_STATUS = "dashboard_status"
+ATTR_TASK_TOTAL = "task_total"
+ATTR_READY = "ready"
+
+# Dispatcher signals
+SIGNAL_SYSTEM_STATE_UPDATED = "cleanme_system_state_updated"
+SIGNAL_ZONE_STATE_UPDATED = "cleanme_zone_state_updated"

@@ -5,6 +5,8 @@ from typing import Any, Dict
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util.dt import as_local
 
 from .const import (
     DOMAIN,
@@ -15,6 +17,15 @@ from .const import (
     ATTR_ERROR_MESSAGE,
     ATTR_IMAGE_SIZE,
     ATTR_API_RESPONSE_TIME,
+    ATTR_ZONE_COUNT,
+    ATTR_DASHBOARD_PATH,
+    ATTR_DASHBOARD_LAST_GENERATED,
+    ATTR_DASHBOARD_LAST_ERROR,
+    ATTR_DASHBOARD_STATUS,
+    ATTR_TASK_TOTAL,
+    ATTR_READY,
+    SIGNAL_SYSTEM_STATE_UPDATED,
+    SIGNAL_ZONE_STATE_UPDATED,
 )
 from .coordinator import CleanMeZone
 
@@ -31,6 +42,11 @@ async def async_setup_entry(
         CleanMeTasksSensor(zone, entry),
         CleanMeLastCheckSensor(zone, entry),
     ]
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if not domain_data.get("system_status_entity_added"):
+        entities.append(CleanMeSystemStatusSensor(hass))
+        domain_data["system_status_entity_added"] = True
 
     async_add_entities(entities)
 
@@ -106,3 +122,86 @@ class CleanMeLastCheckSensor(CleanMeBaseSensor):
             attrs[ATTR_API_RESPONSE_TIME] = round(self._zone.state.api_response_time, 2)
 
         return attrs
+
+
+class CleanMeSystemStatusSensor(SensorEntity):
+    """A single sensor summarizing overall CleanMe health."""
+
+    _attr_has_entity_name = True
+    _attr_name = "System status"
+    _attr_icon = "mdi:shield-check"
+    _attr_unique_id = "cleanme_system_status"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+        self._unsubscribers: list[callable] = []
+
+    async def async_added_to_hass(self) -> None:
+        self._unsubscribers.append(
+            async_dispatcher_connect(
+                self._hass, SIGNAL_SYSTEM_STATE_UPDATED, self.async_write_ha_state
+            )
+        )
+        self._unsubscribers.append(
+            async_dispatcher_connect(
+                self._hass, SIGNAL_ZONE_STATE_UPDATED, self.async_write_ha_state
+            )
+        )
+
+        self.async_write_ha_state()
+
+    async def async_will_remove_from_hass(self) -> None:
+        while self._unsubscribers:
+            unsub = self._unsubscribers.pop()
+            unsub()
+
+    @property
+    def native_value(self) -> str:
+        zones = [
+            zone
+            for zone in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(zone, CleanMeZone)
+        ]
+        dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
+
+        if not zones:
+            return "needs_zone"
+
+        if dashboard_state.get(ATTR_DASHBOARD_STATUS) == "error":
+            return "dashboard_error"
+
+        if dashboard_state.get(ATTR_DASHBOARD_STATUS) in {"pending", "generated"}:
+            return "dashboard_pending"
+
+        return "ready"
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
+        zones = [
+            zone
+            for zone in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(zone, CleanMeZone)
+        ]
+
+        last_generated = dashboard_state.get(ATTR_DASHBOARD_LAST_GENERATED)
+        if last_generated:
+            last_generated = as_local(last_generated).isoformat()
+
+        task_total = sum(len(zone.state.tasks or []) for zone in zones)
+
+        ready = bool(
+            zones
+            and dashboard_state.get(ATTR_DASHBOARD_STATUS) not in {"error", "unavailable"}
+            and dashboard_state.get(ATTR_DASHBOARD_PATH)
+        )
+
+        return {
+            ATTR_ZONE_COUNT: len(zones),
+            ATTR_TASK_TOTAL: task_total,
+            ATTR_DASHBOARD_PATH: dashboard_state.get(ATTR_DASHBOARD_PATH),
+            ATTR_DASHBOARD_LAST_GENERATED: last_generated,
+            ATTR_DASHBOARD_LAST_ERROR: dashboard_state.get(ATTR_DASHBOARD_LAST_ERROR),
+            ATTR_DASHBOARD_STATUS: dashboard_state.get(ATTR_DASHBOARD_STATUS),
+            ATTR_READY: ready,
+        }

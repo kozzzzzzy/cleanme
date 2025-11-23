@@ -11,6 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util.dt import utcnow
 
 from .const import (
     DOMAIN,
@@ -29,6 +31,13 @@ from .const import (
     CONF_API_KEY,
     PERSONALITY_OPTIONS,
     FREQUENCY_OPTIONS,
+    ATTR_ZONE_COUNT,
+    ATTR_DASHBOARD_LAST_ERROR,
+    ATTR_DASHBOARD_LAST_GENERATED,
+    ATTR_DASHBOARD_PATH,
+    ATTR_DASHBOARD_STATUS,
+    SIGNAL_SYSTEM_STATE_UPDATED,
+    SIGNAL_ZONE_STATE_UPDATED,
 )
 from .coordinator import CleanMeZone
 from . import dashboard as cleanme_dashboard
@@ -44,37 +53,55 @@ except ImportError:
     LOGGER.warning("CleanMe: PyYAML not available, YAML dashboard export disabled")
 
 
-def setup_cleanme_logger(hass):
-    """Setup dedicated CleanMe log file."""
+def _get_dashboard_state(hass: HomeAssistant) -> dict[str, Any]:
+    """Return mutable dashboard state dict stored in hass.data."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    return domain_data.setdefault(
+        "dashboard_state",
+        {
+            ATTR_DASHBOARD_PATH: None,
+            ATTR_DASHBOARD_LAST_GENERATED: None,
+            ATTR_DASHBOARD_LAST_ERROR: None,
+            ATTR_DASHBOARD_STATUS: "pending",
+            "panel_registered": False,
+        },
+    )
+
+
+async def async_setup_cleanme_logger(hass: HomeAssistant):
+    """Setup dedicated CleanMe log file without blocking the event loop."""
     logger = logging.getLogger("custom_components.cleanme")
-    
+
     # Avoid duplicate handlers
     if any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
         return logger
-    
+
     logger.setLevel(logging.DEBUG)
-    
+
     # File handler for /config/cleanme.log
     log_file = hass.config.path("cleanme.log")
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=5*1024*1024,  # 5MB
-        backupCount=2
-    )
-    file_handler.setLevel(logging.DEBUG)
-    
-    # Format with timestamp
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    file_handler.setFormatter(formatter)
-    
+
+    def _create_handler():
+        handler = RotatingFileHandler(
+            log_file,
+            maxBytes=5 * 1024 * 1024,  # 5MB
+            backupCount=2,
+        )
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        return handler
+
+    file_handler = await hass.async_add_executor_job(_create_handler)
+
     logger.addHandler(file_handler)
     logger.info("=" * 50)
     logger.info("CleanMe logging initialized")
     logger.info("=" * 50)
-    
+
     return logger
 
 
@@ -86,8 +113,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a CleanMe config entry."""
     hass.data.setdefault(DOMAIN, {})
-    
-    setup_cleanme_logger(hass)
+
+    await async_setup_cleanme_logger(hass)
     LOGGER.info("CleanMe: Setting up zone '%s' (entry_id: %s)", entry.title, entry.entry_id)
 
     zone = CleanMeZone(
@@ -107,14 +134,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Generate and log dashboard configuration
     LOGGER.info("CleanMe: Registering dashboard for zone '%s'", entry.title)
+    dashboard_state = _get_dashboard_state(hass)
+
     try:
         dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
         hass.data[DOMAIN]["dashboard_config"] = dashboard_config
+        dashboard_state[ATTR_DASHBOARD_STATUS] = "generated"
         LOGGER.info("CleanMe: Dashboard generated with %d cards", len(dashboard_config.get("cards", [])))
-        
+
         # Generate YAML dashboard file
         await _regenerate_dashboard_yaml(hass)
     except Exception as e:
+        dashboard_state[ATTR_DASHBOARD_STATUS] = "error"
+        dashboard_state[ATTR_DASHBOARD_LAST_ERROR] = str(e)
+        async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
         LOGGER.error("CleanMe: Failed to generate dashboard: %s", e)
     
     # Register the dashboard as a UI panel if not already registered
@@ -137,9 +170,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             
             # Store the dashboard for the panel
             hass.data[DOMAIN]["dashboard_panel_registered"] = True
+            dashboard_state["panel_registered"] = True
+            async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
             LOGGER.info("CleanMe: Dashboard panel registered in sidebar")
         except Exception as e:
             LOGGER.error("CleanMe: Failed to register dashboard panel: %s", e)
+
+    async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
 
     return True
 
@@ -161,7 +198,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, "delete_zone")
         hass.services.async_remove(DOMAIN, "regenerate_dashboard")
         hass.services.async_remove(DOMAIN, "export_basic_dashboard")
-        
+
         # Remove dashboard panel when all zones are unloaded
         if hass.data[DOMAIN].get("dashboard_panel_registered"):
             try:
@@ -171,8 +208,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     LOGGER.info("CleanMe: Dashboard panel removed from sidebar")
                 else:
                     LOGGER.warning("CleanMe: Frontend component not available, skipping dashboard panel removal")
-                
+
                 hass.data[DOMAIN]["dashboard_panel_registered"] = False
+                dashboard_state = _get_dashboard_state(hass)
+                dashboard_state["panel_registered"] = False
             except Exception as e:
                 LOGGER.error("CleanMe: Failed to remove dashboard panel: %s", e)
     else:
@@ -181,11 +220,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
             hass.data[DOMAIN]["dashboard_config"] = dashboard_config
             LOGGER.info("CleanMe: Dashboard updated after zone removal")
-            
+
             # Regenerate dashboard YAML
             await _regenerate_dashboard_yaml(hass)
         except Exception as e:
             LOGGER.error("CleanMe: Failed to update dashboard: %s", e)
+
+    async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
 
     return unload_ok
 
@@ -199,10 +240,16 @@ def _find_zone_by_name(hass: HomeAssistant, zone_name: str) -> CleanMeZone | Non
 
 async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
     """Generate/update the YAML dashboard file for CleanMe."""
+    dashboard_state = _get_dashboard_state(hass)
+
     if not YAML_AVAILABLE:
         LOGGER.debug("CleanMe: Skipping YAML generation (PyYAML not available)")
+        dashboard_state[ATTR_DASHBOARD_LAST_ERROR] = "PyYAML not available"
+        dashboard_state[ATTR_DASHBOARD_STATUS] = "unavailable"
+        dashboard_state[ATTR_DASHBOARD_LAST_GENERATED] = utcnow()
+        async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
         return
-    
+
     try:
         # Generate dashboard config
         dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
@@ -215,22 +262,37 @@ async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
             "badges": [],
             "cards": dashboard_config["cards"]
         }
-        
+
         # Write to /config/dashboards/cleanme.yaml
         dashboards_dir = hass.config.path("dashboards")
-        
-        # Create dashboards directory if it doesn't exist
-        if not os.path.exists(dashboards_dir):
-            os.makedirs(dashboards_dir, mode=0o755)
-        
-        yaml_file = os.path.join(dashboards_dir, "cleanme.yaml")
-        
-        with open(yaml_file, 'w', encoding='utf-8') as f:
-            yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        
+
+        def _write_yaml() -> str:
+            os.makedirs(dashboards_dir, mode=0o755, exist_ok=True)
+            yaml_file = os.path.join(dashboards_dir, "cleanme.yaml")
+            with open(yaml_file, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    yaml_content,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+            return yaml_file
+
+        yaml_file = await hass.async_add_executor_job(_write_yaml)
+
+        dashboard_state[ATTR_DASHBOARD_PATH] = yaml_file
+        dashboard_state[ATTR_DASHBOARD_LAST_GENERATED] = utcnow()
+        dashboard_state[ATTR_DASHBOARD_LAST_ERROR] = None
+        dashboard_state[ATTR_DASHBOARD_STATUS] = "written"
+        async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
         LOGGER.info("CleanMe: Dashboard YAML written to %s", yaml_file)
     except Exception as e:
         LOGGER.error("CleanMe: Failed to write dashboard YAML: %s", e)
+        dashboard_state[ATTR_DASHBOARD_LAST_ERROR] = str(e)
+        dashboard_state[ATTR_DASHBOARD_LAST_GENERATED] = utcnow()
+        dashboard_state[ATTR_DASHBOARD_STATUS] = "error"
+        async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
 
 
 def _register_services(hass: HomeAssistant) -> None:
@@ -338,23 +400,29 @@ def _register_services(hass: HomeAssistant) -> None:
         if not YAML_AVAILABLE:
             LOGGER.error("CleanMe: PyYAML not available, cannot export dashboard")
             return
-        
+
         try:
             # Generate basic dashboard config
             dashboard_config = cleanme_dashboard.generate_basic_dashboard_config(hass)
-            
+
             # Write to /config/dashboards/cleanme-basic.yaml
             dashboards_dir = hass.config.path("dashboards")
-            
-            # Create dashboards directory if it doesn't exist
-            if not os.path.exists(dashboards_dir):
-                os.makedirs(dashboards_dir, mode=0o755)
-            
-            yaml_file = os.path.join(dashboards_dir, "cleanme-basic.yaml")
-            
-            with open(yaml_file, 'w', encoding='utf-8') as f:
-                yaml.dump(dashboard_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-            
+
+            def _write_basic() -> str:
+                os.makedirs(dashboards_dir, mode=0o755, exist_ok=True)
+                yaml_file = os.path.join(dashboards_dir, "cleanme-basic.yaml")
+                with open(yaml_file, "w", encoding="utf-8") as f:
+                    yaml.dump(
+                        dashboard_config,
+                        f,
+                        default_flow_style=False,
+                        allow_unicode=True,
+                        sort_keys=False,
+                    )
+                return yaml_file
+
+            yaml_file = await hass.async_add_executor_job(_write_basic)
+
             LOGGER.info("CleanMe: Basic dashboard YAML written to %s", yaml_file)
         except Exception as e:
             LOGGER.error("CleanMe: Failed to write basic dashboard YAML: %s", e)

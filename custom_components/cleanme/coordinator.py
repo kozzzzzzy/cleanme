@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client, event
 from homeassistant.util.dt import utcnow
 from homeassistant.components.camera import async_get_image
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     CONF_CAMERA_ENTITY,
@@ -18,6 +19,7 @@ from .const import (
     CONF_CHECK_FREQUENCY,
     FREQUENCY_TO_RUNS,
     PERSONALITY_THOROUGH,
+    SIGNAL_ZONE_STATE_UPDATED,
 )
 from .gemini_client import GeminiClient, GeminiClientError
 
@@ -135,6 +137,7 @@ class CleanMeZone:
                 listener()
             except Exception:
                 continue
+        async_dispatcher_send(self.hass, SIGNAL_ZONE_STATE_UPDATED, self.entry_id)
 
     async def async_snooze(self, minutes: int) -> None:
         """Snooze auto checks for some minutes."""

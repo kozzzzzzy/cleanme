@@ -137,7 +137,7 @@ class CleanMeZone:
                 listener()
             except Exception:
                 continue
-        async_dispatcher_send(self.hass, SIGNAL_ZONE_STATE_UPDATED, self.entry_id)
+        async_dispatcher_send(self.hass, SIGNAL_ZONE_STATE_UPDATED)
 
     async def async_snooze(self, minutes: int) -> None:
         """Snooze auto checks for some minutes."""

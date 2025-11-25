@@ -135,7 +135,13 @@ class CleanMeZone:
         for listener in list(self._listeners):
             try:
                 listener()
-            except Exception:
+            except Exception as err:
+                _LOGGER.error(
+                    "Error notifying listener for zone %s: %s",
+                    self._name,
+                    err,
+                    exc_info=True,
+                )
                 continue
         async_dispatcher_send(self.hass, SIGNAL_ZONE_STATE_UPDATED)
 

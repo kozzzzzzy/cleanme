@@ -257,13 +257,18 @@ async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
         # Generate dashboard config
         dashboard_config = cleanme_dashboard.generate_dashboard_config(hass)
         
-        # Build full Lovelace view YAML
+        # Build full Lovelace dashboard YAML with views list
         yaml_content = {
-            "title": dashboard_config["title"],
-            "path": dashboard_config["path"],
-            "icon": dashboard_config["icon"],
-            "badges": [],
-            "cards": dashboard_config["cards"]
+            "title": "CleanMe",
+            "views": [
+                {
+                    "title": dashboard_config.get("title", "CleanMe"),
+                    "path": dashboard_config.get("path", "cleanme"),
+                    "icon": dashboard_config.get("icon", "mdi:broom"),
+                    "badges": [],
+                    "cards": dashboard_config.get("cards", [])
+                }
+            ]
         }
 
         # Write to /config/dashboards/cleanme.yaml
@@ -310,17 +315,6 @@ async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
                     "CleanMe: Persistent notification component not available; "
                     "skipping dashboard notification"
                 )
-            hass.components.persistent_notification.create(
-                (
-                    "Your CleanMe dashboard has been written to:\n"
-                    f"`{yaml_file}`\n\n"
-                    "To use it, go to **Settings → Dashboards → Add dashboard**, "
-                    "choose **YAML**, and select this file as the source. You can "
-                    "then pin it to the sidebar as \"CleanMe\"."
-                ),
-                title="CleanMe dashboard ready",
-                notification_id="cleanme_dashboard_ready",
-            )
         except Exception as err:
             LOGGER.warning(
                 "CleanMe: Unable to create dashboard notification: %s", err

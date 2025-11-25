@@ -310,6 +310,17 @@ async def _regenerate_dashboard_yaml(hass: HomeAssistant) -> None:
                     "CleanMe: Persistent notification component not available; "
                     "skipping dashboard notification"
                 )
+            hass.components.persistent_notification.create(
+                (
+                    "Your CleanMe dashboard has been written to:\n"
+                    f"`{yaml_file}`\n\n"
+                    "To use it, go to **Settings → Dashboards → Add dashboard**, "
+                    "choose **YAML**, and select this file as the source. You can "
+                    "then pin it to the sidebar as \"CleanMe\"."
+                ),
+                title="CleanMe dashboard ready",
+                notification_id="cleanme_dashboard_ready",
+            )
         except Exception as err:
             LOGGER.warning(
                 "CleanMe: Unable to create dashboard notification: %s", err

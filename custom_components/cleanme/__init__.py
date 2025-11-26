@@ -159,6 +159,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_dispatcher_send(hass, SIGNAL_SYSTEM_STATE_UPDATED)
 
+    # Trigger first AI check automatically so user sees results immediately
+    hass.async_create_task(
+        zone.async_request_check(reason="initial"),
+        f"cleanme_initial_check_{entry.entry_id}"
+    )
+
     return True
 
 
@@ -283,7 +289,7 @@ async def _auto_register_dashboard(
     from homeassistant.components.lovelace import dashboard as lovelace_dashboard
 
     dashboard_state = _get_dashboard_state(hass)
-    url_path = "cleanme"
+    url_path = "clean-me"
     title = "CleanMe"
     icon = "mdi:broom"
 

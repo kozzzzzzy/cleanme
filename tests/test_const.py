@@ -52,13 +52,24 @@ def test_service_and_attribute_names_are_non_empty():
 def test_personality_options_cover_personalities():
     const = load_const_module()
     for personality in [
-        const.PERSONALITY_CHILL,
-        const.PERSONALITY_THOROUGH,
+        const.PERSONALITY_FRIENDLY,
+        const.PERSONALITY_SASSY,
         const.PERSONALITY_STRICT,
-        const.PERSONALITY_SARCASTIC,
-        const.PERSONALITY_PROFESSIONAL,
+        const.PERSONALITY_ZEN,
+        const.PERSONALITY_BRITISH_BUTLER,
+        const.PERSONALITY_GAMER,
+        const.PERSONALITY_MOM,
+        const.PERSONALITY_PIRATE,
     ]:
         assert personality in const.PERSONALITY_OPTIONS
+
+
+def test_ai_personalities_have_system_prompts():
+    const = load_const_module()
+    for key, config in const.AI_PERSONALITIES.items():
+        assert "name" in config, f"AI personality '{key}' should have a name"
+        assert "system_prompt" in config, f"AI personality '{key}' should have a system_prompt"
+        assert len(config["system_prompt"]) > 100, f"AI personality '{key}' system_prompt should be detailed"
 
 
 def test_priority_options_defined():

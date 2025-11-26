@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 # Dashboard constants
 DASHBOARD_TITLE = "CleanMe"
 DASHBOARD_ICON = "mdi:broom"
-DASHBOARD_PATH = "cleanme"
+DASHBOARD_PATH = "clean-me"
 DASHBOARD_BADGES: List[Any] = []
 
 
@@ -175,7 +175,7 @@ def _create_main_cta_card(hass: HomeAssistant, zone_names: List[str]) -> Dict[st
                 "icon": "mdi:view-dashboard",
                 "tap_action": {
                     "action": "navigate",
-                    "navigation_path": "/cleanme"
+                    "navigation_path": "/clean-me"
                 }
             }
         ],

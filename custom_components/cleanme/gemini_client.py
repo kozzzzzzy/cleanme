@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 import aiohttp
 
-from .const import GEMINI_MODEL, GEMINI_API_BASE
+from .const import GEMINI_MODEL, GEMINI_API_BASE, AI_PERSONALITIES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -150,46 +150,32 @@ class GeminiClient:
 
     def _build_prompt(self, room_name: str, personality: str, pickiness: int) -> str:
         """Build the analysis prompt with personality and pickiness instructions."""
-        personality_instructions = self._get_personality_instructions(personality)
+        personality_config = AI_PERSONALITIES.get(personality, AI_PERSONALITIES["friendly"])
+        personality_prompt = personality_config["system_prompt"]
         pickiness_instructions = self._get_pickiness_instructions(pickiness)
 
-        return f"""You are analyzing a room for tidiness using image analysis.
+        return f"""{personality_prompt}
 
-Room type: {room_name}
-Analysis mode: {personality}
+You are analyzing a photo of the "{room_name}" in someone's home.
 Pickiness level: {pickiness}/5
-
-{personality_instructions}
 
 {pickiness_instructions}
 
-Look at this image carefully and determine:
-1. Is the room tidy and organized?
-2. What specific tasks need doing (if any)?
-3. A brief, {personality}-toned comment
-
-Respond ONLY with valid JSON in this exact format:
+Look at this image carefully and provide your response as JSON:
 {{
-  "tidy": true/false,
-  "tasks": ["task 1", "task 2"],
-  "comment": "your observation",
-  "severity": "low/medium/high"
+    "tidy": true/false,
+    "tasks": ["specific task 1", "specific task 2"],
+    "comment": "your in-character paragraph about the room that INCLUDES the specific tasks you noticed woven into your message",
+    "severity": "low/medium/high"
 }}
 
-Focus on: clutter, dishes, trash, surfaces needing cleaning, items out of place.
-Be practical and realistic.
+IMPORTANT:
+- Be specific about what you see. Don't be generic.
+- If you see specific items (red shirt on floor, pizza box, dirty dishes), mention them BY NAME.
+- The "comment" should be a short PARAGRAPH (not just 2-3 sentences) that weaves the tasks into your personality's voice.
+- The tasks in your comment should match the tasks array.
+- Stay fully in character - this is the main thing the user sees!
 Do not include any markdown formatting, just raw JSON."""
-
-    def _get_personality_instructions(self, personality: str) -> str:
-        """Get personality-specific instructions."""
-        instructions = {
-            "chill": "Be relaxed and supportive. Only flag obvious messes. Use a friendly, encouraging tone.",
-            "thorough": "Be detailed and helpful. Use normal tidiness standards. Provide clear, actionable guidance.",
-            "strict": "Be critical and demanding. Flag every imperfection. Use a firm, no-nonsense tone.",
-            "sarcastic": "Be funny and snarky. Make cleanup entertaining. Use witty observations and playful criticism.",
-            "professional": "Be formal and clinical. Use business language. Provide objective, matter-of-fact assessments.",
-        }
-        return instructions.get(personality, instructions["thorough"])
 
     def _get_pickiness_instructions(self, pickiness: int) -> str:
         """Get pickiness level instructions."""

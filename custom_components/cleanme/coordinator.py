@@ -21,7 +21,7 @@ from .const import (
     CONF_PICKINESS,
     CONF_CHECK_FREQUENCY,
     FREQUENCY_TO_RUNS,
-    PERSONALITY_THOROUGH,
+    PERSONALITY_FRIENDLY,
     SIGNAL_ZONE_STATE_UPDATED,
     DEFAULT_CHECK_INTERVAL_HOURS,
     DEFAULT_OVERDUE_THRESHOLD_HOURS,
@@ -69,7 +69,7 @@ class CleanMeZone:
         self._name = name
 
         self._camera_entity_id: str = data[CONF_CAMERA_ENTITY]
-        self._personality: str = data.get(CONF_PERSONALITY, PERSONALITY_THOROUGH)
+        self._personality: str = data.get(CONF_PERSONALITY, PERSONALITY_FRIENDLY)
         self._pickiness: int = int(data.get(CONF_PICKINESS, 3))
         self._check_frequency: str = data.get(CONF_CHECK_FREQUENCY, "manual")
 

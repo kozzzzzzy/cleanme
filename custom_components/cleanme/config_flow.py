@@ -12,6 +12,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import selector
+from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN,
@@ -22,7 +23,7 @@ from .const import (
     CONF_PICKINESS,
     CONF_CHECK_FREQUENCY,
     PERSONALITY_OPTIONS,
-    PERSONALITY_THOROUGH,
+    PERSONALITY_FRIENDLY,
     FREQUENCY_OPTIONS,
     FREQUENCY_MANUAL,
 )
@@ -30,6 +31,25 @@ from .gemini_client import GeminiClient
 
 
 LOGGER = logging.getLogger(__name__)
+
+# Global API key storage
+STORAGE_KEY_CONFIG = "cleanme.config"
+STORAGE_VERSION_CONFIG = 1
+
+
+async def async_get_stored_api_key(hass) -> str | None:
+    """Get stored API key from global storage."""
+    store = Store(hass, STORAGE_VERSION_CONFIG, STORAGE_KEY_CONFIG)
+    data = await store.async_load()
+    return data.get("api_key") if data else None
+
+
+async def async_store_api_key(hass, api_key: str) -> None:
+    """Store API key for future zones."""
+    store = Store(hass, STORAGE_VERSION_CONFIG, STORAGE_KEY_CONFIG)
+    data = await store.async_load() or {}
+    data["api_key"] = api_key
+    await store.async_save(data)
 
 
 class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -41,6 +61,9 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: Dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         errors: dict[str, str] = {}
+
+        # Get stored API key for pre-filling
+        stored_api_key = await async_get_stored_api_key(self.hass)
 
         if user_input is not None:
             try:
@@ -58,6 +81,10 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "invalid_api_key"
                 else:
                     LOGGER.info("CleanMe: API key validated successfully")
+                    
+                    # Store the API key globally for future zones
+                    await async_store_api_key(self.hass, api_key)
+                    
                     name = user_input[CONF_NAME]
                     await self.async_set_unique_id(f"{DOMAIN}_{name.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}")
                     self._abort_if_unique_id_configured()
@@ -78,7 +105,7 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_CAMERA_ENTITY): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="camera")
                 ),
-                vol.Required(CONF_PERSONALITY, default=PERSONALITY_THOROUGH): vol.In(
+                vol.Required(CONF_PERSONALITY, default=PERSONALITY_FRIENDLY): vol.In(
                     list(PERSONALITY_OPTIONS.keys())
                 ),
                 vol.Required(CONF_PICKINESS, default=3): vol.All(
@@ -87,7 +114,7 @@ class CleanMeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_CHECK_FREQUENCY, default=FREQUENCY_MANUAL): vol.In(
                     list(FREQUENCY_OPTIONS.keys())
                 ),
-                vol.Required(CONF_API_KEY): str,
+                vol.Required(CONF_API_KEY, default=stored_api_key or ""): str,
             }
         )
 
@@ -163,7 +190,7 @@ class CleanMeOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Required(
                     CONF_PERSONALITY,
-                    default=data.get(CONF_PERSONALITY, PERSONALITY_THOROUGH),
+                    default=data.get(CONF_PERSONALITY, PERSONALITY_FRIENDLY),
                 ): vol.In(list(PERSONALITY_OPTIONS.keys())),
                 vol.Required(
                     CONF_PICKINESS,

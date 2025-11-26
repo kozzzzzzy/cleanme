@@ -13,7 +13,7 @@ from .const import (
     PRIORITY_OPTIONS,
     PERSONALITY_OPTIONS,
     DEFAULT_PRIORITY,
-    PERSONALITY_THOROUGH,
+    PERSONALITY_FRIENDLY,
 )
 from .coordinator import CleanMeZone
 

@@ -1,5 +1,7 @@
 """Test device info and entity ID generation for CleanMe zones."""
 import importlib.util
+import re
+import unicodedata
 from pathlib import Path
 
 
@@ -14,6 +16,24 @@ def load_module(path: Path, name: str):
     assert spec and spec.loader
     spec.loader.exec_module(module)
     return module
+
+
+def _get_slugify():
+    """Get the slugify function (HA version or fallback)."""
+    try:
+        from homeassistant.util import slugify
+        return slugify
+    except ImportError:
+        # Fallback implementation for testing without HA installed
+        def _fallback_slugify(text: str) -> str:
+            """Simplified slugify for testing."""
+            text = text.lower().strip()
+            text = unicodedata.normalize('NFKD', text)
+            text = text.encode('ascii', 'ignore').decode('ascii')
+            text = re.sub(r'[^\w\s-]', '', text)
+            text = re.sub(r'[-\s]+', '_', text)
+            return text.strip('_')
+        return _fallback_slugify
 
 
 def test_domain_constant_exists():
@@ -32,21 +52,7 @@ def test_gemini_model_is_stable():
 
 def test_slugify_zone_names():
     """Test that zone names are properly slugified for entity IDs."""
-    # Import the Home Assistant slugify function or use a local implementation
-    try:
-        from homeassistant.util import slugify
-    except ImportError:
-        # Fallback implementation for testing without HA installed
-        import re
-        import unicodedata
-        def slugify(text: str) -> str:
-            """Simplified slugify for testing."""
-            text = text.lower().strip()
-            text = unicodedata.normalize('NFKD', text)
-            text = text.encode('ascii', 'ignore').decode('ascii')
-            text = re.sub(r'[^\w\s-]', '', text)
-            text = re.sub(r'[-\s]+', '_', text)
-            return text.strip('_')
+    slugify = _get_slugify()
     
     # Test cases from the problem statement
     test_cases = [
@@ -64,18 +70,7 @@ def test_slugify_zone_names():
 
 def test_entity_id_format():
     """Test that entity IDs follow the expected format with device_info."""
-    try:
-        from homeassistant.util import slugify
-    except ImportError:
-        import re
-        import unicodedata
-        def slugify(text: str) -> str:
-            text = text.lower().strip()
-            text = unicodedata.normalize('NFKD', text)
-            text = text.encode('ascii', 'ignore').decode('ascii')
-            text = re.sub(r'[^\w\s-]', '', text)
-            text = re.sub(r'[-\s]+', '_', text)
-            return text.strip('_')
+    slugify = _get_slugify()
     
     zone_name = "Living Room"
     zone_slug = slugify(zone_name)

@@ -7,11 +7,13 @@ import logging
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client, event
+from homeassistant.helpers.device_registry import DeviceInfo, DeviceEntryType
 from homeassistant.util.dt import utcnow
 from homeassistant.components.camera import async_get_image
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
+    DOMAIN,
     CONF_CAMERA_ENTITY,
     CONF_API_KEY,
     CONF_PERSONALITY,
@@ -96,6 +98,17 @@ class CleanMeZone:
     @property
     def snooze_until(self) -> Optional[datetime]:
         return self._snooze_until
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this zone."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.entry_id)},
+            name=self._name,
+            manufacturer="CleanMe",
+            model="AI Tidy Zone",
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     async def async_setup(self) -> None:
         """Set up timers if auto mode is enabled."""

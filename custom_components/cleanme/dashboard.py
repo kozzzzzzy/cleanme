@@ -5,11 +5,15 @@ Falls back to standard Home Assistant cards if Bubble Card is not available.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import slugify
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 # Dashboard constants
 DASHBOARD_TITLE = "CleanMe"
@@ -196,12 +200,17 @@ def _create_zones_grid(zone_names: List[str]) -> List[Dict[str, Any]]:
     zone_cards = []
     
     for zone_name in zone_names:
-        zone_id = zone_name.lower().replace(" ", "_")
+        zone_slug = slugify(zone_name)
+        _LOGGER.debug(
+            "Creating zone card for '%s' with slug '%s'",
+            zone_name,
+            zone_slug,
+        )
         
         zone_card = {
             "type": "custom:bubble-card",
             "card_type": "button",
-            "entity": f"binary_sensor.{zone_id}_tidy",
+            "entity": f"binary_sensor.{zone_slug}_tidy",
             "name": zone_name,
             "icon": "mdi:home",
             "show_state": True,
@@ -249,8 +258,14 @@ def _create_zones_grid(zone_names: List[str]) -> List[Dict[str, Any]]:
             ],
             "styles": """
               .bubble-button-card-container {
-                background: var(--card-background-color);
+                background: linear-gradient(135deg, var(--card-background-color) 0%, var(--secondary-background-color) 100%);
                 border: 2px solid var(--primary-color);
+                border-radius: 16px;
+                transition: all 0.3s ease;
+              }
+              .bubble-button-card-container:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
               }
               .bubble-icon {
                 color: var(--primary-color);
@@ -444,8 +459,13 @@ def _create_summary_card(hass: HomeAssistant) -> Dict[str, Any]:
 
 def _create_zone_card(zone_name: str) -> Dict[str, Any]:
     """Create a comprehensive card for a single zone using standard Lovelace cards."""
-    # Sanitize zone name for entity IDs
-    zone_id = zone_name.lower().replace(" ", "_")
+    # Sanitize zone name for entity IDs using proper slugify
+    zone_slug = slugify(zone_name)
+    _LOGGER.debug(
+        "Creating basic zone card for '%s' with slug '%s'",
+        zone_name,
+        zone_slug,
+    )
 
     return {
         "type": "vertical-stack",
@@ -457,17 +477,17 @@ def _create_zone_card(zone_name: str) -> Dict[str, Any]:
                 "show_header_toggle": False,
                 "entities": [
                     {
-                        "entity": f"binary_sensor.{zone_id}_tidy",
+                        "entity": f"binary_sensor.{zone_slug}_tidy",
                         "name": "Tidy Status",
                         "icon": "mdi:check-circle",
                     },
                     {
-                        "entity": f"sensor.{zone_id}_tasks",
+                        "entity": f"sensor.{zone_slug}_tasks",
                         "name": "Tasks to Complete",
                         "icon": "mdi:format-list-checkbox",
                     },
                     {
-                        "entity": f"sensor.{zone_id}_last_check",
+                        "entity": f"sensor.{zone_slug}_last_check",
                         "name": "Last Checked",
                         "icon": "mdi:clock-outline",
                     },
@@ -478,14 +498,14 @@ def _create_zone_card(zone_name: str) -> Dict[str, Any]:
                 "type": "conditional",
                 "conditions": [
                     {
-                        "entity": f"sensor.{zone_id}_tasks",
+                        "entity": f"sensor.{zone_slug}_tasks",
                         "state_not": "0",
                     }
                 ],
                 "card": {
                     "type": "markdown",
                     "content": (
-                        f"{{% set tasks = state_attr('sensor.{zone_id}_tasks', 'tasks') %}}\n"
+                        f"{{% set tasks = state_attr('sensor.{zone_slug}_tasks', 'tasks') %}}\n"
                         "{% if tasks %}\n"
                         "**Tasks to complete:**\n"
                         "{% for task in tasks %}\n"
@@ -500,14 +520,14 @@ def _create_zone_card(zone_name: str) -> Dict[str, Any]:
                 "type": "conditional",
                 "conditions": [
                     {
-                        "entity": f"sensor.{zone_id}_tasks",
+                        "entity": f"sensor.{zone_slug}_tasks",
                         "state_not": "unavailable",
                     }
                 ],
                 "card": {
                     "type": "markdown",
                     "content": (
-                        f"{{% set comment = state_attr('sensor.{zone_id}_tasks', 'comment') %}}\n"
+                        f"{{% set comment = state_attr('sensor.{zone_slug}_tasks', 'comment') %}}\n"
                         "{% if comment %}\n"
                         "**💬 Note:** {{ comment }}\n"
                         "{% endif %}"
@@ -598,22 +618,22 @@ def create_basic_entities_card(zone_name: str) -> Dict[str, Any]:
     
     This is the standard card type for the basic dashboard.
     """
-    zone_id = zone_name.lower().replace(" ", "_")
+    zone_slug = slugify(zone_name)
     
     return {
         "type": "entities",
         "title": f"🧹 {zone_name}",
         "entities": [
             {
-                "entity": f"binary_sensor.{zone_id}_tidy",
+                "entity": f"binary_sensor.{zone_slug}_tidy",
                 "name": "Status",
             },
             {
-                "entity": f"sensor.{zone_id}_tasks",
+                "entity": f"sensor.{zone_slug}_tasks",
                 "name": "Task Count",
             },
             {
-                "entity": f"sensor.{zone_id}_last_check",
+                "entity": f"sensor.{zone_slug}_last_check",
                 "name": "Last Check",
             },
             {

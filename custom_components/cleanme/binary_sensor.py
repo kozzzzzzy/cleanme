@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Callable
 
 from homeassistant.components.binary_sensor import (
@@ -8,6 +9,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util.dt import as_local
 
@@ -29,6 +31,8 @@ from .const import (
 )
 from .coordinator import CleanMeZone
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -38,12 +42,26 @@ async def async_setup_entry(
     """Set up CleanMe binary sensors for a config entry."""
     zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
 
+    _LOGGER.info(
+        "Creating binary sensors for zone '%s' (entry_id: %s)",
+        zone.name,
+        entry.entry_id,
+    )
+
     entities = [CleanMeTidyBinarySensor(zone, entry)]
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("ready_entity_added"):
+        _LOGGER.info("Creating global CleanMeReadyBinarySensor")
         entities.append(CleanMeReadyBinarySensor(hass))
         domain_data["ready_entity_added"] = True
+
+    for entity in entities:
+        _LOGGER.debug(
+            "Adding entity: unique_id=%s, has_device_info=%s",
+            getattr(entity, "unique_id", None),
+            hasattr(entity, "device_info"),
+        )
 
     async_add_entities(entities)
 
@@ -66,6 +84,11 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
     @property
     def unique_id(self) -> str:
         return f"{self._entry_id}_tidy"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info linking to the zone device."""
+        return self._zone.device_info
 
     @property
     def is_on(self) -> bool:

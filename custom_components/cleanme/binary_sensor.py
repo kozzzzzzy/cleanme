@@ -184,7 +184,7 @@ class CleanMeSnoozedBinarySensor(CleanMeZoneBinarySensor):
 class CleanMeGlobalBinarySensor(BinarySensorEntity):
     """Base class for global CleanMe binary sensors."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -220,7 +220,7 @@ class CleanMeGlobalBinarySensor(BinarySensorEntity):
 class CleanMeReadyBinarySensor(CleanMeGlobalBinarySensor):
     """Binary sensor showing CleanMe overall readiness."""
 
-    _attr_name = "Ready"
+    _attr_name = "CleanMe Ready"
     _attr_icon = "mdi:check-circle"
     _attr_unique_id = "cleanme_ready"
 
@@ -257,7 +257,7 @@ class CleanMeReadyBinarySensor(CleanMeGlobalBinarySensor):
 class CleanMeAllTidyBinarySensor(CleanMeGlobalBinarySensor):
     """Binary sensor showing if all zones are tidy."""
 
-    _attr_name = "All tidy"
+    _attr_name = "CleanMe All Tidy"
     _attr_icon = "mdi:home-heart"
     _attr_unique_id = "cleanme_all_tidy"
 

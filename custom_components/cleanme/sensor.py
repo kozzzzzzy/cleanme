@@ -256,7 +256,7 @@ class CleanMeMessinessScoreSensor(CleanMeBaseSensor):
 class CleanMeGlobalBaseSensor(SensorEntity):
     """Base class for global CleanMe sensors."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -292,7 +292,7 @@ class CleanMeGlobalBaseSensor(SensorEntity):
 class CleanMeSystemStatusSensor(CleanMeGlobalBaseSensor):
     """A single sensor summarizing overall CleanMe health."""
 
-    _attr_name = "System status"
+    _attr_name = "CleanMe System Status"
     _attr_icon = "mdi:shield-check"
     _attr_unique_id = "cleanme_system_status"
 
@@ -347,7 +347,7 @@ class CleanMeSystemStatusSensor(CleanMeGlobalBaseSensor):
 class CleanMeTotalZonesSensor(CleanMeGlobalBaseSensor):
     """Sensor showing total configured zones."""
 
-    _attr_name = "Total zones"
+    _attr_name = "CleanMe Total Zones"
     _attr_icon = "mdi:home-group"
     _attr_unique_id = "cleanme_total_zones"
     _attr_native_unit_of_measurement = "zones"
@@ -361,7 +361,7 @@ class CleanMeTotalZonesSensor(CleanMeGlobalBaseSensor):
 class CleanMeZonesNeedingAttentionSensor(CleanMeGlobalBaseSensor):
     """Sensor showing count of zones needing attention."""
 
-    _attr_name = "Zones needing attention"
+    _attr_name = "CleanMe Zones Needing Attention"
     _attr_icon = "mdi:alert-circle"
     _attr_unique_id = "cleanme_zones_needing_attention"
     _attr_native_unit_of_measurement = "zones"
@@ -384,7 +384,7 @@ class CleanMeZonesNeedingAttentionSensor(CleanMeGlobalBaseSensor):
 class CleanMeNextScheduledCheckSensor(CleanMeGlobalBaseSensor):
     """Sensor showing when the next scheduled check is."""
 
-    _attr_name = "Next scheduled check"
+    _attr_name = "CleanMe Next Scheduled Check"
     _attr_icon = "mdi:calendar-clock"
     _attr_unique_id = "cleanme_next_scheduled_check"
     _attr_device_class = SensorDeviceClass.TIMESTAMP

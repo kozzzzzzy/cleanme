@@ -1,6 +1,6 @@
 """Gemini API client for CleanMe.
 
-Uses Google's Gemini 2.0 Flash Experimental model for fast, accurate
+Uses Google's Gemini 2.0 Flash model for fast, accurate
 vision analysis of room images. Supports configurable personalities and
 pickiness levels for customized tidiness assessments.
 """
@@ -84,6 +84,18 @@ class GeminiClient:
 
         try:
             async with session.post(url, headers=headers, json=payload, timeout=90) as resp:
+                if resp.status == 429:
+                    text = await resp.text()
+                    _LOGGER.warning(
+                        "Gemini API quota exceeded (429). This usually means your free-tier "
+                        "quota is exhausted. Model: %s. Response: %s",
+                        GEMINI_MODEL,
+                        text[:500],
+                    )
+                    raise GeminiClientError(
+                        f"Gemini API quota exceeded. Free-tier limit reached for model {GEMINI_MODEL}. "
+                        "Try again later or upgrade your API key."
+                    )
                 if resp.status != 200:
                     text = await resp.text()
                     raise GeminiClientError(f"Gemini API HTTP {resp.status}: {text}")

@@ -46,9 +46,9 @@ PERSONALITY_OPTIONS = {
 }
 
 # Gemini model configuration
-# Using gemini-2.0-flash-exp for best balance of speed, cost, and vision capabilities
-# Alternative: gemini-1.5-pro-latest for higher quality
-GEMINI_MODEL = "gemini-2.0-flash-exp"
+# Using gemini-2.0-flash for vision analysis (free tier: ~15 RPM, 1500 RPD)
+# Alternative: gemini-1.5-flash for lower rate limits
+GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 # Sensor attributes
@@ -64,6 +64,11 @@ ATTR_ERROR_MESSAGE = "error_message"
 ATTR_IMAGE_SIZE = "image_size"
 ATTR_API_RESPONSE_TIME = "api_response_time"
 ATTR_SNOOZE_UNTIL = "snooze_until"
+
+# AI status attributes
+ATTR_AI_STATUS = "ai_status"
+ATTR_AI_ERROR = "ai_error"
+ATTR_AI_MODEL = "ai_model"
 
 # Services
 SERVICE_REQUEST_CHECK = "request_check"

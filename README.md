@@ -319,6 +319,8 @@ Import these via **Settings** → **Automations & Scenes** → **Blueprints** �
 
 ## 🐛 Troubleshooting
 
+> **Running Home Assistant OS?** See the dedicated [HA OS Debugging Guide](docs/DEBUGGING_HA_OS.md) for CLI commands specific to HA OS (including Proxmox VMs).
+
 ### Config flow won't load
 - Check **Settings** → **System** → **Logs** for errors from `custom_components.cleanme`
 - Restart Home Assistant after installing or updating

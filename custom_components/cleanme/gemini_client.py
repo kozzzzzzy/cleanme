@@ -167,15 +167,14 @@ Look at this image carefully and provide your response as JSON:
 {{
     "tidy": true/false,
     "tasks": ["specific task 1", "specific task 2"],
-    "comment": "your in-character paragraph about the room that INCLUDES the specific tasks you noticed woven into your message",
+    "comment": "your in-character comment about the room (2 sentences MAX, under 200 chars)",
     "severity": "low/medium/high"
 }}
 
 IMPORTANT:
 - Be specific about what you see. Don't be generic.
 - If you see specific items (red shirt on floor, pizza box, dirty dishes), mention them BY NAME.
-- The "comment" should be a short PARAGRAPH (not just 2-3 sentences) that weaves the tasks into your personality's voice.
-- The tasks in your comment should match the tasks array.
+- The "comment" MUST be 2 sentences MAX and under 200 characters total. Be punchy, not verbose!
 - Stay fully in character - this is the main thing the user sees!
 Do not include any markdown formatting, just raw JSON."""
 

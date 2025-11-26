@@ -232,8 +232,22 @@ class CleanMeAICommentSensor(CleanMeBaseSensor):
 
     @property
     def native_value(self) -> str | None:
-        """Return the AI comment."""
-        return self._zone.state.comment or "No comment yet"
+        """Return truncated AI comment (max 255 chars for HA state)."""
+        comment = self._zone.state.comment or "No comment yet"
+        # Truncate to 250 chars with ellipsis if too long
+        if len(comment) > 250:
+            return comment[:247] + "..."
+        return comment
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return FULL comment in attributes (no length limit)."""
+        full_comment = self._zone.state.comment or ""
+        return {
+            "full_comment": full_comment,
+            "comment_length": len(full_comment),
+            "truncated": len(full_comment) > 250,
+        }
 
 
 class CleanMeMessinessScoreSensor(CleanMeBaseSensor):

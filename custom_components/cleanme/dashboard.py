@@ -1,7 +1,7 @@
 """Auto-generate Lovelace dashboard configuration for CleanMe zones.
 
-This dashboard uses Bubble Card for a modern, beautiful UI.
-Falls back to standard Home Assistant cards if Bubble Card is not available.
+This dashboard uses Mushroom Cards for a modern, beautiful UI.
+Falls back to standard Home Assistant cards if Mushroom Cards are not available.
 """
 from __future__ import annotations
 
@@ -26,7 +26,12 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     """
     Generate a complete Lovelace dashboard configuration for all CleanMe zones.
     
-    Uses Bubble Card for a modern, beautiful interface.
+    Uses Mushroom Cards for a modern, beautiful interface with:
+    - Mushroom template cards for status display
+    - Mini-graph-card for messiness history
+    - Conditional cards for alerts
+    - Markdown for task lists and AI comments
+    - Color-coded status indicators
     
     Returns a dashboard configuration dict that can be used to create
     a dashboard in Home Assistant.
@@ -42,28 +47,26 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     # Build cards
     cards = []
     
-    # 1. App header with Bubble separator
-    cards.append(_create_bubble_separator("CleanMe Dashboard", "mdi:broom"))
+    # 1. Header section with system status
+    cards.append(_create_mushroom_header())
+    cards.append(_create_mushroom_status_row())
     
-    # 2. Status overview row (House status + CleanMe health)
-    cards.append(_create_status_overview_row(hass))
+    # 2. Alert section (conditional - only shown when zones need attention)
+    cards.append(_create_alert_section())
     
-    # 3. "What should I do now?" main CTA card with action buttons
+    # 3. Zone cards with Mushroom design
     if zone_names:
-        cards.append(_create_main_cta_card(hass, zone_names))
+        cards.append(_create_section_title("Your Zones"))
+        for zone_name in zone_names:
+            cards.append(_create_mushroom_zone_card(zone_name))
     
-    # 4. Zones grid with Bubble button cards
-    if zone_names:
-        cards.append(_create_bubble_separator("Your Zones", "mdi:home-group"))
-        cards.extend(_create_zones_grid(zone_names))
+    # 4. Quick actions row
+    cards.append(_create_section_title("Quick Actions"))
+    cards.append(_create_mushroom_quick_actions())
     
-    # 5. Quick actions row
-    cards.append(_create_bubble_separator("Quick Actions", "mdi:lightning-bolt"))
-    cards.append(_create_quick_actions_row())
-    
-    # 6. System info section for power users
-    cards.append(_create_bubble_separator("System Info", "mdi:information"))
-    cards.append(_create_system_info_section(hass))
+    # 5. System info section
+    cards.append(_create_section_title("System Info"))
+    cards.append(_create_mushroom_system_info())
 
     # Build the complete dashboard configuration
     dashboard_config = {
@@ -77,308 +80,313 @@ def generate_dashboard_config(hass: HomeAssistant) -> Dict[str, Any]:
     return dashboard_config
 
 
-def _create_bubble_separator(title: str, icon: str) -> Dict[str, Any]:
-    """Create a Bubble Card separator/header."""
+def _create_mushroom_header() -> Dict[str, Any]:
+    """Create a Mushroom title card for the dashboard header."""
     return {
-        "type": "custom:bubble-card",
-        "card_type": "separator",
-        "name": title,
-        "icon": icon,
-        "styles": """
-          .bubble-line {
-            background: var(--primary-color);
-            opacity: 0.5;
-          }
-        """
+        "type": "custom:mushroom-title-card",
+        "title": "🧹 CleanMe Dashboard",
+        "subtitle": "Keep your home tidy with AI-powered room analysis",
     }
 
 
-def _create_status_overview_row(hass: HomeAssistant) -> Dict[str, Any]:
-    """Create status overview with Bubble Cards showing house status and system health."""
-    zones_data = hass.data.get(DOMAIN, {})
-    zone_count = sum(1 for zone in zones_data.values() if hasattr(zone, 'name'))
-    
+def _create_mushroom_status_row() -> Dict[str, Any]:
+    """Create status overview with Mushroom chips showing house status."""
     return {
         "type": "horizontal-stack",
         "cards": [
             {
-                "type": "custom:bubble-card",
-                "card_type": "button",
+                "type": "custom:mushroom-template-card",
                 "entity": "sensor.cleanme_system_status",
-                "name": "House Status",
+                "primary": "House Status",
+                "secondary": "{{ states('sensor.cleanme_system_status') | replace('_', ' ') | title }}",
                 "icon": "mdi:home-analytics",
-                "show_state": True,
-                "show_last_changed": False,
+                "icon_color": "{% if states('sensor.cleanme_system_status') == 'ready' %}green{% elif states('sensor.cleanme_system_status') == 'needs_zone' %}orange{% else %}red{% endif %}",
                 "tap_action": {"action": "more-info"},
-                "styles": """
-                  .bubble-button-card-container {
-                    background: var(--card-background-color);
-                  }
-                """
+                "layout": "vertical",
             },
             {
-                "type": "custom:bubble-card",
-                "card_type": "button",
+                "type": "custom:mushroom-template-card",
                 "entity": "binary_sensor.cleanme_ready",
-                "name": "CleanMe Status",
+                "primary": "System Ready",
+                "secondary": "{% if is_state('binary_sensor.cleanme_ready', 'on') %}Online{% else %}Offline{% endif %}",
                 "icon": "mdi:robot-vacuum",
-                "show_state": True,
-                "show_last_changed": False,
+                "icon_color": "{% if is_state('binary_sensor.cleanme_ready', 'on') %}green{% else %}red{% endif %}",
                 "tap_action": {"action": "more-info"},
-                "styles": """
-                  .bubble-button-card-container {
-                    background: var(--card-background-color);
-                  }
-                """
-            }
+                "layout": "vertical",
+            },
+            {
+                "type": "custom:mushroom-template-card",
+                "entity": "sensor.cleanme_zones_needing_attention",
+                "primary": "Attention",
+                "secondary": "{{ states('sensor.cleanme_zones_needing_attention') }} zones",
+                "icon": "mdi:alert-circle",
+                "icon_color": "{% if states('sensor.cleanme_zones_needing_attention') | int > 0 %}red{% else %}green{% endif %}",
+                "tap_action": {"action": "more-info"},
+                "layout": "vertical",
+            },
         ]
     }
 
 
-def _create_main_cta_card(hass: HomeAssistant, zone_names: List[str]) -> Dict[str, Any]:
-    """Create main call-to-action card with prominent action buttons."""
-    zones_data = hass.data.get(DOMAIN, {})
-    
-    # Count zones that need attention
-    messy_zones = []
-    for zone in zones_data.values():
-        if hasattr(zone, 'name') and hasattr(zone, 'state'):
-            if not zone.state.tidy:
-                messy_zones.append(zone.name)
-    
-    if messy_zones:
-        cta_text = f"{len(messy_zones)} zone{'s' if len(messy_zones) > 1 else ''} need attention"
-        cta_sub = f"Let's tackle: {', '.join(messy_zones[:2])}" if len(messy_zones) <= 2 else f"Let's get started"
-    else:
-        cta_text = "Looking good"
-        cta_sub = "All zones are tidy"
-    
+def _create_alert_section() -> Dict[str, Any]:
+    """Create a conditional alert card for zones needing attention."""
     return {
-        "type": "custom:bubble-card",
-        "card_type": "pop-up",
-        "hash": "#cleanme-actions",
-        "name": cta_text,
-        "icon": "mdi:broom" if messy_zones else "mdi:check-circle",
-        "entity": "sensor.cleanme_system_status",
-        "show_state": True,
-        "sub_button": [
+        "type": "conditional",
+        "conditions": [
             {
-                "name": "Check All",
-                "icon": "mdi:camera-iris",
-                "tap_action": {
-                    "action": "call-service",
-                    "service": "script.cleanme_check_all_zones",
-                }
-            },
-            {
-                "name": "Dashboard",
-                "icon": "mdi:view-dashboard",
-                "tap_action": {
-                    "action": "navigate",
-                    "navigation_path": "/clean-me"
-                }
+                "entity": "sensor.cleanme_zones_needing_attention",
+                "state_not": "0",
             }
         ],
-        "styles": """
-          .bubble-pop-up-container {
-            background: var(--primary-color);
-            color: var(--text-primary-color);
-          }
-          .bubble-name {
-            font-size: 1.2em;
-            font-weight: bold;
-          }
-          .bubble-sub-name {
-            opacity: 0.8;
-          }
-        """
+        "card": {
+            "type": "custom:mushroom-template-card",
+            "entity": "sensor.cleanme_zones_needing_attention",
+            "primary": "⚠️ Zones Need Attention",
+            "secondary": "{{ state_attr('sensor.cleanme_zones_needing_attention', 'zones') | join(', ') }}",
+            "icon": "mdi:alert",
+            "icon_color": "red",
+            "card_mod": {
+                "style": """
+                    ha-card {
+                        background: rgba(var(--rgb-red), 0.1);
+                        border: 1px solid rgba(var(--rgb-red), 0.3);
+                    }
+                """
+            }
+        }
     }
 
 
-def _create_zones_grid(zone_names: List[str]) -> List[Dict[str, Any]]:
-    """Create a grid of Bubble button cards for each zone."""
-    zone_cards = []
-    
-    for zone_name in zone_names:
-        zone_slug = slugify(zone_name)
-        _LOGGER.debug(
-            "Creating zone card for '%s' with slug '%s'",
-            zone_name,
-            zone_slug,
-        )
-        
-        zone_card = {
-            "type": "custom:bubble-card",
-            "card_type": "button",
-            "entity": f"binary_sensor.{zone_slug}_tidy",
-            "name": zone_name,
-            "icon": "mdi:home",
-            "show_state": True,
-            "show_attribute": False,
-            "show_last_changed": True,
-            "tap_action": {"action": "more-info"},
-            "sub_button": [
-                {
-                    "name": "Check",
-                    "icon": "mdi:camera-iris",
-                    "show_background": False,
-                    "tap_action": {
-                        "action": "call-service",
-                        "service": "cleanme.request_check",
-                        "service_data": {
-                            "zone": zone_name
-                        }
-                    }
-                },
-                {
-                    "name": "Done",
-                    "icon": "mdi:check-bold",
-                    "show_background": False,
-                    "tap_action": {
-                        "action": "call-service",
-                        "service": "cleanme.clear_tasks",
-                        "service_data": {
-                            "zone": zone_name
-                        }
-                    }
-                },
-                {
-                    "name": "Snooze",
-                    "icon": "mdi:sleep",
-                    "show_background": False,
-                    "tap_action": {
-                        "action": "call-service",
-                        "service": "cleanme.snooze_zone",
-                        "service_data": {
-                            "zone": zone_name,
-                            "duration_minutes": 60
-                        }
-                    }
-                }
-            ],
-            "styles": """
-              .bubble-button-card-container {
-                background: linear-gradient(135deg, var(--card-background-color) 0%, var(--secondary-background-color) 100%);
-                border: 2px solid var(--primary-color);
-                border-radius: 16px;
-                transition: all 0.3s ease;
-              }
-              .bubble-button-card-container:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-              }
-              .bubble-icon {
-                color: var(--primary-color);
-              }
-            """
-        }
-        
-        zone_cards.append(zone_card)
-    
-    # Wrap in grid layout
-    if len(zone_cards) > 1:
-        return [{
-            "type": "grid",
-            "square": False,
-            "columns": 2,
-            "cards": zone_cards
-        }]
-    else:
-        return zone_cards
-
-
-def _create_quick_actions_row() -> Dict[str, Any]:
-    """Create a row of quick action Bubble buttons."""
+def _create_section_title(title: str) -> Dict[str, Any]:
+    """Create a section title using Mushroom title card."""
     return {
-        "type": "horizontal-stack",
+        "type": "custom:mushroom-title-card",
+        "title": title,
+    }
+
+
+def _create_mushroom_zone_card(zone_name: str) -> Dict[str, Any]:
+    """Create a comprehensive Mushroom card for a single zone."""
+    zone_slug = slugify(zone_name)
+    _LOGGER.debug(
+        "Creating Mushroom zone card for '%s' with slug '%s'",
+        zone_name,
+        zone_slug,
+    )
+    
+    return {
+        "type": "vertical-stack",
         "cards": [
+            # Zone status header with Mushroom template card
             {
-                "type": "custom:bubble-card",
-                "card_type": "button",
-                "name": "Add Zone",
+                "type": "custom:mushroom-template-card",
+                "entity": f"binary_sensor.{zone_slug}_tidy",
+                "primary": zone_name,
+                "secondary": "{% if is_state(entity, 'on') %}✅ Tidy{% else %}🧹 Needs cleaning{% endif %}",
+                "icon": "mdi:home",
+                "icon_color": f"{{% if is_state('binary_sensor.{zone_slug}_tidy', 'on') %}}green{{% else %}}orange{{% endif %}}",
+                "tap_action": {"action": "more-info"},
+                "badge_icon": f"{{% if states('sensor.{zone_slug}_tasks') | int > 0 %}}mdi:numeric-{{{{ states('sensor.{zone_slug}_tasks') }}}}{{% endif %}}",
+                "badge_color": "red",
+            },
+            # Messiness score gauge with mini-graph
+            {
+                "type": "custom:mini-graph-card",
+                "entities": [
+                    {
+                        "entity": f"sensor.{zone_slug}_messiness_score",
+                        "name": "Messiness",
+                    }
+                ],
+                "name": "Messiness History",
+                "hours_to_show": 24,
+                "points_per_hour": 1,
+                "line_color": "var(--primary-color)",
+                "line_width": 2,
+                "show": {
+                    "name": True,
+                    "icon": False,
+                    "state": True,
+                    "legend": False,
+                    "fill": "fade",
+                },
+                "height": 80,
+            },
+            # Stats row with chips
+            {
+                "type": "custom:mushroom-chips-card",
+                "chips": [
+                    {
+                        "type": "entity",
+                        "entity": f"sensor.{zone_slug}_tasks",
+                        "icon": "mdi:format-list-checkbox",
+                        "content_info": "state",
+                    },
+                    {
+                        "type": "entity",
+                        "entity": f"sensor.{zone_slug}_clean_streak",
+                        "icon": "mdi:fire",
+                        "content_info": "state",
+                    },
+                    {
+                        "type": "entity",
+                        "entity": f"sensor.{zone_slug}_total_cleans",
+                        "icon": "mdi:counter",
+                        "content_info": "state",
+                    },
+                ],
+                "alignment": "center",
+            },
+            # Task list (conditional - only shown when tasks > 0)
+            {
+                "type": "conditional",
+                "conditions": [
+                    {
+                        "entity": f"sensor.{zone_slug}_tasks",
+                        "state_not": "0",
+                    }
+                ],
+                "card": {
+                    "type": "markdown",
+                    "content": (
+                        f"{{% set tasks = state_attr('sensor.{zone_slug}_tasks', 'tasks') %}}\n"
+                        "{% if tasks %}\n"
+                        "### 📋 Tasks\n"
+                        "{% for task in tasks %}\n"
+                        "- {{ task }}\n"
+                        "{% endfor %}\n"
+                        "{% endif %}"
+                    ),
+                },
+            },
+            # AI Comment section - reads FULL comment from attribute
+            {
+                "type": "conditional",
+                "conditions": [
+                    {
+                        "entity": f"sensor.{zone_slug}_ai_comment",
+                        "state_not": "unavailable",
+                    },
+                    {
+                        "entity": f"sensor.{zone_slug}_ai_comment",
+                        "state_not": "No comment yet",
+                    },
+                ],
+                "card": {
+                    "type": "markdown",
+                    "content": (
+                        f"{{% set full_comment = state_attr('sensor.{zone_slug}_ai_comment', 'full_comment') %}}\n"
+                        f"{{% set comment = full_comment if full_comment else states('sensor.{zone_slug}_ai_comment') %}}\n"
+                        "{% if comment %}\n"
+                        "### 💬 AI Says\n"
+                        "{{ comment }}\n"
+                        "{% endif %}"
+                    ),
+                },
+            },
+            # Action buttons with Mushroom chips
+            {
+                "type": "custom:mushroom-chips-card",
+                "chips": [
+                    {
+                        "type": "action",
+                        "icon": "mdi:camera-iris",
+                        "tap_action": {
+                            "action": "call-service",
+                            "service": "cleanme.request_check",
+                            "data": {
+                                "zone": zone_name,
+                            },
+                        },
+                    },
+                    {
+                        "type": "action",
+                        "icon": "mdi:check-bold",
+                        "tap_action": {
+                            "action": "call-service",
+                            "service": "cleanme.clear_tasks",
+                            "data": {
+                                "zone": zone_name,
+                            },
+                        },
+                    },
+                    {
+                        "type": "action",
+                        "icon": "mdi:sleep",
+                        "tap_action": {
+                            "action": "call-service",
+                            "service": "cleanme.snooze_zone",
+                            "data": {
+                                "zone": zone_name,
+                                "duration_minutes": 60,
+                            },
+                        },
+                    },
+                ],
+                "alignment": "center",
+            },
+        ],
+    }
+
+
+def _create_mushroom_quick_actions() -> Dict[str, Any]:
+    """Create a row of quick action Mushroom chips."""
+    return {
+        "type": "custom:mushroom-chips-card",
+        "chips": [
+            {
+                "type": "action",
                 "icon": "mdi:plus-circle",
                 "tap_action": {
                     "action": "navigate",
                     "navigation_path": "/config/integrations/integration/cleanme"
                 },
-                "button_type": "name",
-                "styles": """
-                  .bubble-button-card-container {
-                    background: var(--primary-color);
-                    color: var(--text-primary-color);
-                  }
-                """
             },
             {
-                "type": "custom:bubble-card",
-                "card_type": "button",
-                "name": "Settings",
+                "type": "action",
                 "icon": "mdi:cog",
                 "tap_action": {
                     "action": "navigate",
                     "navigation_path": "/config/integrations/integration/cleanme"
                 },
-                "button_type": "name",
-                "styles": """
-                  .bubble-button-card-container {
-                    background: var(--secondary-background-color);
-                  }
-                """
             },
             {
-                "type": "custom:bubble-card",
-                "card_type": "button",
-                "name": "Reload",
+                "type": "action",
                 "icon": "mdi:refresh",
                 "tap_action": {
                     "action": "call-service",
                     "service": "cleanme.regenerate_dashboard"
                 },
-                "button_type": "name",
-                "styles": """
-                  .bubble-button-card-container {
-                    background: var(--secondary-background-color);
-                  }
-                """
-            }
-        ]
+            },
+        ],
+        "alignment": "center",
     }
 
 
-def _create_system_info_section(hass: HomeAssistant) -> Dict[str, Any]:
-    """Create system information section for power users."""
+def _create_mushroom_system_info() -> Dict[str, Any]:
+    """Create system information section with Mushroom cards."""
     return {
-        "type": "entities",
-        "title": "System Details",
-        "show_header_toggle": False,
-        "entities": [
+        "type": "custom:mushroom-chips-card",
+        "chips": [
             {
-                "entity": "binary_sensor.cleanme_ready",
-                "name": "System Ready",
-                "icon": "mdi:check-circle"
+                "type": "entity",
+                "entity": "sensor.cleanme_total_zones",
+                "icon": "mdi:home-group",
+                "content_info": "state",
             },
             {
-                "entity": "sensor.cleanme_system_status",
-                "type": "attribute",
-                "attribute": "zone_count",
-                "name": "Total Zones",
-                "icon": "mdi:counter"
+                "type": "entity",
+                "entity": "sensor.cleanme_next_scheduled_check",
+                "icon": "mdi:calendar-clock",
+                "content_info": "state",
             },
             {
-                "entity": "sensor.cleanme_system_status",
-                "type": "attribute",
-                "attribute": "task_total",
-                "name": "Total Tasks",
-                "icon": "mdi:format-list-checkbox"
+                "type": "entity",
+                "entity": "binary_sensor.cleanme_all_tidy",
+                "icon": "mdi:check-circle",
             },
-            {
-                "entity": "binary_sensor.cleanme_ready",
-                "type": "attribute",
-                "attribute": "dashboard_path",
-                "name": "Dashboard File",
-                "icon": "mdi:file-document"
-            }
-        ]
+        ],
+        "alignment": "center",
     }
 
 
@@ -588,9 +596,9 @@ def get_required_custom_cards() -> List[str]:
     """
     Return list of custom cards required for the dashboard.
     
-    Returns Bubble Card as the required custom card for the main dashboard.
+    Returns Mushroom Cards and mini-graph-card as the required custom cards.
     """
-    return ["bubble-card"]
+    return ["mushroom", "mini-graph-card"]
 
 
 def create_simple_cards_list(hass: HomeAssistant) -> List[Dict[str, Any]]:

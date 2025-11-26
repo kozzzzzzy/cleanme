@@ -182,11 +182,8 @@ All methods require this HACS custom card:
 - **HACS**: Search "Bubble Card"
 - **GitHub**: `Clooos/Bubble-Card`
 - **Install**: HACS → Frontend → Explore & Download Repositories
-- **HACS**: Search "Card Mod"
-- **GitHub**: `thomasloven/lovelace-card-mod`
-- **Install**: HACS → Frontend → Explore & Download Repositories
 
-**After installing custom cards:**
+**After installing custom card:**
 1. Clear browser cache (Ctrl+Shift+R or Cmd+Shift+R)
 2. Refresh Home Assistant
 3. Check cards appear correctly

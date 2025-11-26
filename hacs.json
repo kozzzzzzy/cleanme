@@ -1,6 +1,6 @@
 {
   "name": "CleanMe – Tidy Task Tracker",
   "render_readme": true,
-  "domains": ["sensor", "binary_sensor"],
+  "domains": ["sensor", "binary_sensor", "button", "number", "select"],
   "homeassistant": "2024.6.0"
 }

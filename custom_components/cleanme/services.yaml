@@ -195,3 +195,56 @@ export_basic_dashboard:
   name: Export basic dashboard
   description: Export a basic dashboard without custom cards (Bubble Card) to /config/dashboards/cleanme-basic.yaml. Useful for users who haven't installed custom cards yet.
 
+mark_clean:
+  name: Mark clean
+  description: Mark a zone as cleaned. Updates clean streak and total cleans statistics.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to mark as clean.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+
+unsnooze:
+  name: Unsnooze
+  description: Cancel snooze for a zone and allow checks to run again.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to unsnooze.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+
+check_all:
+  name: Check all zones
+  description: Trigger an AI check for all configured zones at once.
+
+set_priority:
+  name: Set priority
+  description: Set the priority level for a zone.
+  fields:
+    zone:
+      name: Zone
+      description: The name of the zone to set priority for.
+      required: true
+      example: "Kitchen"
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: The priority level (low, medium, high).
+      required: true
+      default: "medium"
+      selector:
+        select:
+          options:
+            - label: "Low"
+              value: "low"
+            - label: "Medium"
+              value: "medium"
+            - label: "High"
+              value: "high"

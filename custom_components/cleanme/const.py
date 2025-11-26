@@ -1,6 +1,6 @@
 DOMAIN = "cleanme"
 
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "button", "number", "select"]
 
 # Configuration keys
 CONF_NAME = "name"
@@ -75,10 +75,31 @@ SERVICE_REQUEST_CHECK = "request_check"
 SERVICE_SNOOZE_ZONE = "snooze_zone"
 SERVICE_CLEAR_TASKS = "clear_tasks"
 SERVICE_ADD_ZONE = "add_zone"
+SERVICE_MARK_CLEAN = "mark_clean"
+SERVICE_UNSNOOZE = "unsnooze"
+SERVICE_CHECK_ALL = "check_all"
+SERVICE_SET_PRIORITY = "set_priority"
 
 # Service parameters
 ATTR_ZONE = "zone"
 ATTR_DURATION_MINUTES = "duration_minutes"
+ATTR_PRIORITY = "priority"
+
+# Priority options
+PRIORITY_LOW = "low"
+PRIORITY_MEDIUM = "medium"
+PRIORITY_HIGH = "high"
+
+PRIORITY_OPTIONS = {
+    PRIORITY_LOW: "Low",
+    PRIORITY_MEDIUM: "Medium",
+    PRIORITY_HIGH: "High",
+}
+
+# Default settings
+DEFAULT_CHECK_INTERVAL_HOURS = 24
+DEFAULT_OVERDUE_THRESHOLD_HOURS = 48
+DEFAULT_PRIORITY = PRIORITY_MEDIUM
 
 # Dashboard/status attributes
 ATTR_ZONE_COUNT = "zone_count"
@@ -89,6 +110,25 @@ ATTR_DASHBOARD_PANEL = "dashboard_panel"
 ATTR_DASHBOARD_STATUS = "dashboard_status"
 ATTR_TASK_TOTAL = "task_total"
 ATTR_READY = "ready"
+
+# Extended state attributes
+ATTR_LAST_CLEANED = "last_cleaned"
+ATTR_CLEAN_STREAK = "clean_streak"
+ATTR_TOTAL_CLEANS = "total_cleans"
+ATTR_AI_COMMENT = "ai_comment"
+ATTR_MESSINESS_SCORE = "messiness_score"
+ATTR_SNOOZED = "snoozed"
+ATTR_SNOOZED_UNTIL = "snoozed_until"
+ATTR_NEEDS_ATTENTION = "needs_attention"
+ATTR_OVERDUE = "overdue"
+ATTR_CHECK_INTERVAL = "check_interval"
+ATTR_ZONES_NEEDING_ATTENTION = "zones_needing_attention"
+ATTR_NEXT_SCHEDULED_CHECK = "next_scheduled_check"
+ATTR_ALL_TIDY = "all_tidy"
+
+# Storage keys
+STORAGE_KEY = "cleanme.zones"
+STORAGE_VERSION = 1
 
 # Dispatcher signals
 SIGNAL_SYSTEM_STATE_UPDATED = "cleanme_system_state_updated"

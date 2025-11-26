@@ -22,8 +22,13 @@ from .const import (
     SERVICE_SNOOZE_ZONE,
     SERVICE_CLEAR_TASKS,
     SERVICE_ADD_ZONE,
+    SERVICE_MARK_CLEAN,
+    SERVICE_UNSNOOZE,
+    SERVICE_CHECK_ALL,
+    SERVICE_SET_PRIORITY,
     ATTR_ZONE,
     ATTR_DURATION_MINUTES,
+    ATTR_PRIORITY,
     CONF_NAME,
     CONF_CAMERA_ENTITY,
     CONF_PERSONALITY,
@@ -32,6 +37,7 @@ from .const import (
     CONF_API_KEY,
     PERSONALITY_OPTIONS,
     FREQUENCY_OPTIONS,
+    PRIORITY_OPTIONS,
     ATTR_ZONE_COUNT,
     ATTR_DASHBOARD_LAST_ERROR,
     ATTR_DASHBOARD_LAST_GENERATED,
@@ -169,6 +175,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SNOOZE_ZONE)
         hass.services.async_remove(DOMAIN, SERVICE_CLEAR_TASKS)
         hass.services.async_remove(DOMAIN, SERVICE_ADD_ZONE)
+        hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEAN)
+        hass.services.async_remove(DOMAIN, SERVICE_UNSNOOZE)
+        hass.services.async_remove(DOMAIN, SERVICE_CHECK_ALL)
+        hass.services.async_remove(DOMAIN, SERVICE_SET_PRIORITY)
         hass.services.async_remove(DOMAIN, "update_zone_config")
         hass.services.async_remove(DOMAIN, "delete_zone")
         hass.services.async_remove(DOMAIN, "regenerate_dashboard")
@@ -409,6 +419,48 @@ def _register_services(hass: HomeAssistant) -> None:
         except Exception as e:
             LOGGER.error("CleanMe: Failed to write basic dashboard YAML: %s", e)
 
+    async def handle_mark_clean(call: ServiceCall) -> None:
+        """Mark a zone as cleaned."""
+        zone_name = call.data[ATTR_ZONE]
+        zone = _find_zone_by_name(hass, zone_name)
+        if not zone:
+            LOGGER.warning("CleanMe: Zone '%s' not found for mark_clean", zone_name)
+            return
+        await zone.async_mark_clean()
+        LOGGER.info("CleanMe: Zone '%s' marked as clean", zone_name)
+
+    async def handle_unsnooze(call: ServiceCall) -> None:
+        """Cancel snooze for a zone."""
+        zone_name = call.data[ATTR_ZONE]
+        zone = _find_zone_by_name(hass, zone_name)
+        if not zone:
+            LOGGER.warning("CleanMe: Zone '%s' not found for unsnooze", zone_name)
+            return
+        await zone.async_unsnooze()
+        LOGGER.info("CleanMe: Zone '%s' unsnoozed", zone_name)
+
+    async def handle_check_all(call: ServiceCall) -> None:
+        """Check all zones."""
+        zones = [
+            zone
+            for zone in hass.data.get(DOMAIN, {}).values()
+            if isinstance(zone, CleanMeZone)
+        ]
+        LOGGER.info("CleanMe: Checking all %d zones", len(zones))
+        for zone in zones:
+            await zone.async_request_check(reason="check_all")
+
+    async def handle_set_priority(call: ServiceCall) -> None:
+        """Set zone priority."""
+        zone_name = call.data[ATTR_ZONE]
+        priority = call.data[ATTR_PRIORITY]
+        zone = _find_zone_by_name(hass, zone_name)
+        if not zone:
+            LOGGER.warning("CleanMe: Zone '%s' not found for set_priority", zone_name)
+            return
+        await zone.async_set_priority(priority)
+        LOGGER.info("CleanMe: Zone '%s' priority set to '%s'", zone_name, priority)
+
 
     hass.services.async_register(
         DOMAIN,
@@ -488,4 +540,37 @@ def _register_services(hass: HomeAssistant) -> None:
         "export_basic_dashboard",
         handle_export_basic_dashboard,
         vol.Schema({}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MARK_CLEAN,
+        handle_mark_clean,
+        vol.Schema({vol.Required(ATTR_ZONE): str}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UNSNOOZE,
+        handle_unsnooze,
+        vol.Schema({vol.Required(ATTR_ZONE): str}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CHECK_ALL,
+        handle_check_all,
+        vol.Schema({}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PRIORITY,
+        handle_set_priority,
+        vol.Schema(
+            {
+                vol.Required(ATTR_ZONE): str,
+                vol.Required(ATTR_PRIORITY): vol.In(list(PRIORITY_OPTIONS.keys())),
+            }
+        ),
     )

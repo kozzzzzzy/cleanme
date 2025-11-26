@@ -26,6 +26,8 @@ from .const import (
     ATTR_DASHBOARD_LAST_ERROR,
     ATTR_DASHBOARD_STATUS,
     ATTR_READY,
+    ATTR_SNOOZED_UNTIL,
+    ATTR_ALL_TIDY,
     SIGNAL_SYSTEM_STATE_UPDATED,
     SIGNAL_ZONE_STATE_UPDATED,
 )
@@ -48,12 +50,18 @@ async def async_setup_entry(
         entry.entry_id,
     )
 
-    entities = [CleanMeTidyBinarySensor(zone, entry)]
+    entities = [
+        CleanMeTidyBinarySensor(zone, entry),
+        CleanMeNeedsAttentionBinarySensor(zone, entry),
+        CleanMeOverdueBinarySensor(zone, entry),
+        CleanMeSnoozedBinarySensor(zone, entry),
+    ]
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("ready_entity_added"):
-        _LOGGER.info("Creating global CleanMeReadyBinarySensor")
+        _LOGGER.info("Creating global CleanMe binary sensors")
         entities.append(CleanMeReadyBinarySensor(hass))
+        entities.append(CleanMeAllTidyBinarySensor(hass))
         domain_data["ready_entity_added"] = True
 
     for entity in entities:
@@ -66,13 +74,10 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class CleanMeTidyBinarySensor(BinarySensorEntity):
-    """Binary sensor: is the room tidy?"""
+class CleanMeZoneBinarySensor(BinarySensorEntity):
+    """Base class for CleanMe zone binary sensors."""
 
     _attr_has_entity_name = True
-    _attr_name = "Tidy"
-    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
-    _attr_icon = "mdi:broom"
 
     def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
         self._zone = zone
@@ -82,13 +87,21 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
         self._zone.add_listener(self.async_write_ha_state)
 
     @property
-    def unique_id(self) -> str:
-        return f"{self._entry_id}_tidy"
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Return device info linking to the zone device."""
         return self._zone.device_info
+
+
+class CleanMeTidyBinarySensor(CleanMeZoneBinarySensor):
+    """Binary sensor: is the room tidy?"""
+
+    _attr_name = "Tidy"
+    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    _attr_icon = "mdi:broom"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry_id}_tidy"
 
     @property
     def is_on(self) -> bool:
@@ -111,13 +124,67 @@ class CleanMeTidyBinarySensor(BinarySensorEntity):
         return attrs
 
 
-class CleanMeReadyBinarySensor(BinarySensorEntity):
-    """Binary sensor showing CleanMe overall readiness."""
+class CleanMeNeedsAttentionBinarySensor(CleanMeZoneBinarySensor):
+    """Binary sensor: does the room need attention?"""
+
+    _attr_name = "Needs attention"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:alert-circle"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry_id}_needs_attention"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if zone needs attention (messy and not snoozed)."""
+        return self._zone.needs_attention
+
+
+class CleanMeOverdueBinarySensor(CleanMeZoneBinarySensor):
+    """Binary sensor: is the zone overdue for cleaning?"""
+
+    _attr_name = "Overdue"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:clock-alert"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry_id}_overdue"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if zone hasn't been cleaned in too long."""
+        return self._zone.is_overdue
+
+
+class CleanMeSnoozedBinarySensor(CleanMeZoneBinarySensor):
+    """Binary sensor: is the zone currently snoozed?"""
+
+    _attr_name = "Snoozed"
+    _attr_icon = "mdi:sleep"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry_id}_snoozed"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if zone is currently snoozed."""
+        return self._zone.is_snoozed
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return snooze end time."""
+        if self._zone.snooze_until:
+            return {ATTR_SNOOZED_UNTIL: self._zone.snooze_until.isoformat()}
+        return {}
+
+
+class CleanMeGlobalBinarySensor(BinarySensorEntity):
+    """Base class for global CleanMe binary sensors."""
 
     _attr_has_entity_name = True
-    _attr_name = "Ready"
-    _attr_icon = "mdi:check-circle"
-    _attr_unique_id = "cleanme_ready"
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -134,7 +201,6 @@ class CleanMeReadyBinarySensor(BinarySensorEntity):
                 self._hass, SIGNAL_ZONE_STATE_UPDATED, self.async_write_ha_state
             )
         )
-
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -142,13 +208,25 @@ class CleanMeReadyBinarySensor(BinarySensorEntity):
             unsub = self._unsubscribers.pop()
             unsub()
 
-    @property
-    def is_on(self) -> bool:
-        zones = [
+    def _get_zones(self) -> list[CleanMeZone]:
+        """Get all CleanMe zones."""
+        return [
             zone
             for zone in self._hass.data.get(DOMAIN, {}).values()
             if isinstance(zone, CleanMeZone)
         ]
+
+
+class CleanMeReadyBinarySensor(CleanMeGlobalBinarySensor):
+    """Binary sensor showing CleanMe overall readiness."""
+
+    _attr_name = "Ready"
+    _attr_icon = "mdi:check-circle"
+    _attr_unique_id = "cleanme_ready"
+
+    @property
+    def is_on(self) -> bool:
+        zones = self._get_zones()
         dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
 
         has_dashboard = bool(dashboard_state.get(ATTR_DASHBOARD_PATH))
@@ -159,11 +237,7 @@ class CleanMeReadyBinarySensor(BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
-        zones = [
-            zone
-            for zone in self._hass.data.get(DOMAIN, {}).values()
-            if isinstance(zone, CleanMeZone)
-        ]
+        zones = self._get_zones()
 
         last_generated = dashboard_state.get(ATTR_DASHBOARD_LAST_GENERATED)
         if last_generated:
@@ -177,4 +251,33 @@ class CleanMeReadyBinarySensor(BinarySensorEntity):
             ATTR_DASHBOARD_LAST_GENERATED: last_generated,
             ATTR_DASHBOARD_LAST_ERROR: dashboard_state.get(ATTR_DASHBOARD_LAST_ERROR),
             ATTR_READY: ready,
+        }
+
+
+class CleanMeAllTidyBinarySensor(CleanMeGlobalBinarySensor):
+    """Binary sensor showing if all zones are tidy."""
+
+    _attr_name = "All tidy"
+    _attr_icon = "mdi:home-heart"
+    _attr_unique_id = "cleanme_all_tidy"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if all zones are tidy."""
+        zones = self._get_zones()
+        if not zones:
+            return False
+        return all(zone.state.tidy for zone in zones)
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return zone status summary."""
+        zones = self._get_zones()
+        tidy_zones = [zone.name for zone in zones if zone.state.tidy]
+        messy_zones = [zone.name for zone in zones if not zone.state.tidy]
+        
+        return {
+            "tidy_zones": tidy_zones,
+            "messy_zones": messy_zones,
+            ATTR_ZONE_COUNT: len(zones),
         }

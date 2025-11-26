@@ -150,7 +150,9 @@ class GeminiClient:
 
     def _build_prompt(self, room_name: str, personality: str, pickiness: int) -> str:
         """Build the analysis prompt with personality and pickiness instructions."""
-        personality_config = AI_PERSONALITIES.get(personality, AI_PERSONALITIES["friendly"])
+        # Use friendly as default fallback - guaranteed to exist in AI_PERSONALITIES
+        default_personality = AI_PERSONALITIES.get("friendly", list(AI_PERSONALITIES.values())[0])
+        personality_config = AI_PERSONALITIES.get(personality, default_personality)
         personality_prompt = personality_config["system_prompt"]
         pickiness_instructions = self._get_pickiness_instructions(pickiness)
 

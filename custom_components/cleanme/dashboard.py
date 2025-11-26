@@ -184,9 +184,16 @@ def _create_mushroom_zone_card(zone_name: str) -> Dict[str, Any]:
                 "primary": zone_name,
                 "secondary": "{% if is_state(entity, 'on') %}✅ Tidy{% else %}🧹 Needs cleaning{% endif %}",
                 "icon": "mdi:home",
-                "icon_color": f"{{% if is_state('binary_sensor.{zone_slug}_tidy', 'on') %}}green{{% else %}}orange{{% endif %}}",
+                "icon_color": (
+                    "{% if is_state('binary_sensor." + zone_slug + "_tidy', 'on') %}"
+                    "green{% else %}orange{% endif %}"
+                ),
                 "tap_action": {"action": "more-info"},
-                "badge_icon": f"{{% if states('sensor.{zone_slug}_tasks') | int > 0 %}}mdi:numeric-{{{{ states('sensor.{zone_slug}_tasks') }}}}{{% endif %}}",
+                "badge_icon": (
+                    "{% if states('sensor." + zone_slug + "_tasks') | int > 0 %}"
+                    "mdi:numeric-{{ states('sensor." + zone_slug + "_tasks') }}"
+                    "{% endif %}"
+                ),
                 "badge_color": "red",
             },
             # Messiness score gauge with mini-graph

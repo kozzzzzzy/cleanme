@@ -1,29 +1,41 @@
-request_check:
-  name: Request check
-  description: Trigger an immediate camera snapshot and Gemini analysis for a zone.
+check:
+  name: Check spot
+  description: Take a camera snapshot and compare to the spot's Ready State definition.
   fields:
-    zone:
-      name: Zone
-      description: The name of the zone to check.
+    spot:
+      name: Spot
+      description: The name of the spot to check.
       required: true
-      example: "Kitchen"
+      example: "My Work Desk"
       selector:
         text:
 
-snooze_zone:
-  name: Snooze zone
-  description: Pause automatic checks for a zone for a specified duration.
+reset:
+  name: Reset spot
+  description: Mark the spot as fixed. Clears the "to sort" list and updates the streak.
   fields:
-    zone:
-      name: Zone
-      description: The name of the zone to snooze.
+    spot:
+      name: Spot
+      description: The name of the spot to reset.
       required: true
-      example: "Kitchen"
+      example: "My Work Desk"
+      selector:
+        text:
+
+snooze:
+  name: Snooze spot
+  description: Pause automatic checks and hide from "needs attention" for a duration.
+  fields:
+    spot:
+      name: Spot
+      description: The name of the spot to snooze.
+      required: true
+      example: "My Work Desk"
       selector:
         text:
     duration_minutes:
       name: Duration (minutes)
-      description: How long to snooze the zone (1-1440 minutes).
+      description: How long to snooze (1-1440 minutes, max 24 hours).
       required: true
       example: 60
       selector:
@@ -32,219 +44,26 @@ snooze_zone:
           max: 1440
           unit_of_measurement: minutes
 
-clear_tasks:
-  name: Clear tasks
-  description: Clear all tasks for a zone and mark it as tidy.
-  fields:
-    zone:
-      name: Zone
-      description: The name of the zone to clear tasks for.
-      required: true
-      example: "Kitchen"
-      selector:
-        text:
-
-add_zone:
-  name: Add zone
-  description: Dynamically add a new zone (advanced users).
-  fields:
-    name:
-      name: Zone name
-      description: Name of the zone (e.g., "Kitchen").
-      required: true
-      example: "Living Room"
-      selector:
-        text:
-    camera_entity:
-      name: Camera entity
-      description: Camera entity ID to use for this zone.
-      required: true
-      example: "camera.living_room"
-      selector:
-        entity:
-          domain: camera
-    personality:
-      name: AI Personality
-      description: The personality style for AI analysis.
-      required: true
-      default: "thorough"
-      selector:
-        select:
-          options:
-            - label: "😊 Chill - Relaxed, supportive"
-              value: "chill"
-            - label: "🤓 Thorough - Detailed, helpful"
-              value: "thorough"
-            - label: "😤 Strict - Critical, demanding"
-              value: "strict"
-            - label: "🤪 Sarcastic - Funny, snarky"
-              value: "sarcastic"
-            - label: "💼 Professional - Formal, clinical"
-              value: "professional"
-    pickiness:
-      name: Pickiness level
-      description: How picky the AI should be (1=lenient, 5=perfectionist).
-      required: true
-      default: 3
-      selector:
-        number:
-          min: 1
-          max: 5
-          mode: slider
-    check_frequency:
-      name: Check frequency
-      description: How often to automatically check this zone.
-      required: true
-      default: "manual"
-      selector:
-        select:
-          options:
-            - label: "Manual only"
-              value: "manual"
-            - label: "1x daily"
-              value: "1x"
-            - label: "2x daily"
-              value: "2x"
-            - label: "4x daily"
-              value: "4x"
-    api_key:
-      name: Gemini API key
-      description: Your Google Gemini API key.
-      required: true
-      selector:
-        text:
-          type: password
-
-update_zone_config:
-  name: Update zone configuration
-  description: Update settings for an existing zone.
-  fields:
-    zone:
-      name: Zone
-      description: The name of the zone to update.
-      required: true
-      example: "Kitchen"
-      selector:
-        text:
-    pickiness:
-      name: Pickiness level
-      description: How picky the AI should be (1=lenient, 5=perfectionist).
-      required: false
-      selector:
-        number:
-          min: 1
-          max: 5
-          mode: slider
-    personality:
-      name: AI Personality
-      description: The personality style for AI analysis.
-      required: false
-      selector:
-        select:
-          options:
-            - label: "😊 Chill - Relaxed, supportive"
-              value: "chill"
-            - label: "🤓 Thorough - Detailed, helpful"
-              value: "thorough"
-            - label: "😤 Strict - Critical, demanding"
-              value: "strict"
-            - label: "🤪 Sarcastic - Funny, snarky"
-              value: "sarcastic"
-            - label: "💼 Professional - Formal, clinical"
-              value: "professional"
-    check_frequency:
-      name: Check frequency
-      description: How often to automatically check this zone.
-      required: false
-      selector:
-        select:
-          options:
-            - label: "Manual only"
-              value: "manual"
-            - label: "1x daily"
-              value: "1x"
-            - label: "2x daily"
-              value: "2x"
-            - label: "4x daily"
-              value: "4x"
-    camera_entity:
-      name: Camera entity
-      description: Camera entity ID to use for this zone.
-      required: false
-      selector:
-        entity:
-          domain: camera
-
-delete_zone:
-  name: Delete zone
-  description: Completely remove a zone from CleanMe.
-  fields:
-    zone:
-      name: Zone
-      description: The name of the zone to delete.
-      required: true
-      example: "Kitchen"
-      selector:
-        text:
-
-regenerate_dashboard:
-  name: Regenerate dashboard
-  description: Manually regenerate the CleanMe dashboard YAML file at /config/dashboards/cleanme.yaml.
-
-export_basic_dashboard:
-  name: Export basic dashboard
-  description: Export a basic dashboard without custom cards (Bubble Card) to /config/dashboards/cleanme-basic.yaml. Useful for users who haven't installed custom cards yet.
-
-mark_clean:
-  name: Mark clean
-  description: Mark a zone as cleaned. Updates clean streak and total cleans statistics.
-  fields:
-    zone:
-      name: Zone
-      description: The name of the zone to mark as clean.
-      required: true
-      example: "Kitchen"
-      selector:
-        text:
-
 unsnooze:
-  name: Unsnooze
-  description: Cancel snooze for a zone and allow checks to run again.
+  name: Unsnooze spot
+  description: Cancel snooze and re-enable checks for a spot.
   fields:
-    zone:
-      name: Zone
-      description: The name of the zone to unsnooze.
+    spot:
+      name: Spot
+      description: The name of the spot to unsnooze.
       required: true
-      example: "Kitchen"
+      example: "My Work Desk"
       selector:
         text:
 
 check_all:
-  name: Check all zones
-  description: Trigger an AI check for all configured zones at once.
+  name: Check all spots
+  description: Run a check on all configured spots at once.
 
-set_priority:
-  name: Set priority
-  description: Set the priority level for a zone.
-  fields:
-    zone:
-      name: Zone
-      description: The name of the zone to set priority for.
-      required: true
-      example: "Kitchen"
-      selector:
-        text:
-    priority:
-      name: Priority
-      description: The priority level (low, medium, high).
-      required: true
-      default: "medium"
-      selector:
-        select:
-          options:
-            - label: "Low"
-              value: "low"
-            - label: "Medium"
-              value: "medium"
-            - label: "High"
-              value: "high"
+regenerate_dashboard:
+  name: Regenerate dashboard
+  description: Regenerate the TwinSync Spot dashboard YAML file.
+
+export_basic_dashboard:
+  name: Export basic dashboard
+  description: Export a basic dashboard using only standard Home Assistant cards.

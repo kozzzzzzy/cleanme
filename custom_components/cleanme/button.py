@@ -1,8 +1,8 @@
-"""Button platform for CleanMe."""
+"""Button platform for TwinSync Spot."""
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Callable
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
@@ -13,9 +13,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .const import (
     DOMAIN,
     SIGNAL_SYSTEM_STATE_UPDATED,
-    SIGNAL_ZONE_STATE_UPDATED,
+    SIGNAL_SPOT_STATE_UPDATED,
 )
-from .coordinator import CleanMeZone
+from .coordinator import TwinSyncSpot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,86 +25,89 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Set up CleanMe button entities for a config entry."""
-    zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
+    """Set up buttons for a spot."""
+    spot: TwinSyncSpot = hass.data[DOMAIN][entry.entry_id]
 
-    _LOGGER.info(
-        "Creating button entities for zone '%s' (entry_id: %s)",
-        zone.name,
-        entry.entry_id,
-    )
+    _LOGGER.info("Creating buttons for spot '%s'", spot.name)
 
     entities = [
-        CleanMeCheckNowButton(zone, entry),
-        CleanMeMarkCleanButton(zone, entry),
-        CleanMeSnooze1hButton(zone, entry),
-        CleanMeSnoozeTomorrowButton(zone, entry),
-        CleanMeUnsnoozeButton(zone, entry),
+        SpotCheckButton(spot, entry),
+        SpotResetButton(spot, entry),
+        SpotSnooze1hButton(spot, entry),
+        SpotSnoozeTomorrowButton(spot, entry),
+        SpotUnsnoozeButton(spot, entry),
     ]
 
     # Add global buttons only once
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("global_buttons_added"):
-        _LOGGER.info("Creating global CleanMe button entities")
-        entities.append(CleanMeCheckAllButton(hass))
-        entities.append(CleanMeMarkAllCleanButton(hass))
+        _LOGGER.info("Creating global TwinSync Spot buttons")
+        entities.append(CheckAllButton(hass))
+        entities.append(ResetAllButton(hass))
         domain_data["global_buttons_added"] = True
 
     async_add_entities(entities)
 
 
-class CleanMeZoneButton(ButtonEntity):
-    """Base class for CleanMe zone buttons."""
+class SpotBaseButton(ButtonEntity):
+    """Base class for spot buttons."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
-        self._zone = zone
+    def __init__(self, spot: TwinSyncSpot, entry: ConfigEntry) -> None:
+        self._spot = spot
         self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        self._zone.add_listener(self.async_write_ha_state)
+        self._spot.add_listener(self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info linking to the zone device."""
-        return self._zone.device_info
+        return self._spot.device_info
 
 
-class CleanMeCheckNowButton(CleanMeZoneButton):
-    """Button to trigger an AI check."""
+class SpotCheckButton(SpotBaseButton):
+    """Button to check the spot now.
 
-    _attr_name = "Check Now"
+    Takes a camera snapshot and compares to the definition.
+    """
+
+    _attr_name = "Check"  # Text label, not just icon
     _attr_icon = "mdi:camera-iris"
 
     @property
     def unique_id(self) -> str:
-        return f"{self._entry_id}_check_now"
+        return f"{self._entry_id}_check"
 
     async def async_press(self) -> None:
-        """Handle button press."""
-        _LOGGER.info("Check Now button pressed for zone '%s'", self._zone.name)
-        await self._zone.async_request_check(reason="button")
+        _LOGGER.info("Check button pressed for '%s'", self._spot.name)
+        await self._spot.async_check(reason="button")
 
 
-class CleanMeMarkCleanButton(CleanMeZoneButton):
-    """Button to mark zone as cleaned."""
+class SpotResetButton(SpotBaseButton):
+    """Button to reset (mark as fixed).
 
-    _attr_name = "Mark Clean"
+    User confirms they've sorted the spot.
+    Updates streak and clears to_sort list.
+    """
+
+    _attr_name = "Reset"  # "I've fixed it"
     _attr_icon = "mdi:check-bold"
 
     @property
     def unique_id(self) -> str:
-        return f"{self._entry_id}_mark_clean"
+        return f"{self._entry_id}_reset"
 
     async def async_press(self) -> None:
-        """Handle button press."""
-        _LOGGER.info("Mark Clean button pressed for zone '%s'", self._zone.name)
-        await self._zone.async_mark_clean()
+        _LOGGER.info("Reset button pressed for '%s'", self._spot.name)
+        await self._spot.async_reset()
 
 
-class CleanMeSnooze1hButton(CleanMeZoneButton):
-    """Button to snooze zone for 1 hour."""
+class SpotSnooze1hButton(SpotBaseButton):
+    """Button to snooze for 1 hour.
+
+    Pauses auto-checks and hides from "needs attention".
+    """
 
     _attr_name = "Snooze 1h"
     _attr_icon = "mdi:sleep"
@@ -114,15 +117,17 @@ class CleanMeSnooze1hButton(CleanMeZoneButton):
         return f"{self._entry_id}_snooze_1h"
 
     async def async_press(self) -> None:
-        """Handle button press."""
-        _LOGGER.info("Snooze 1h button pressed for zone '%s'", self._zone.name)
-        await self._zone.async_snooze(minutes=60)
+        _LOGGER.info("Snooze 1h button pressed for '%s'", self._spot.name)
+        await self._spot.async_snooze(minutes=60)
 
 
-class CleanMeSnoozeTomorrowButton(CleanMeZoneButton):
-    """Button to snooze zone until tomorrow."""
+class SpotSnoozeTomorrowButton(SpotBaseButton):
+    """Button to snooze until tomorrow.
 
-    _attr_name = "Snooze Tomorrow"
+    24-hour snooze for "I'll deal with it later" days.
+    """
+
+    _attr_name = "Later"  # Friendly name
     _attr_icon = "mdi:weather-night"
 
     @property
@@ -130,14 +135,15 @@ class CleanMeSnoozeTomorrowButton(CleanMeZoneButton):
         return f"{self._entry_id}_snooze_tomorrow"
 
     async def async_press(self) -> None:
-        """Handle button press."""
-        _LOGGER.info("Snooze Tomorrow button pressed for zone '%s'", self._zone.name)
-        # Snooze for 24 hours
-        await self._zone.async_snooze(minutes=1440)
+        _LOGGER.info("Snooze Tomorrow button pressed for '%s'", self._spot.name)
+        await self._spot.async_snooze(minutes=1440)  # 24 hours
 
 
-class CleanMeUnsnoozeButton(CleanMeZoneButton):
-    """Button to cancel snooze for zone."""
+class SpotUnsnoozeButton(SpotBaseButton):
+    """Button to cancel snooze.
+
+    Re-enables checks and attention tracking.
+    """
 
     _attr_name = "Unsnooze"
     _attr_icon = "mdi:alarm-off"
@@ -147,80 +153,66 @@ class CleanMeUnsnoozeButton(CleanMeZoneButton):
         return f"{self._entry_id}_unsnooze"
 
     async def async_press(self) -> None:
-        """Handle button press."""
-        _LOGGER.info("Unsnooze button pressed for zone '%s'", self._zone.name)
-        await self._zone.async_unsnooze()
+        _LOGGER.info("Unsnooze button pressed for '%s'", self._spot.name)
+        await self._spot.async_unsnooze()
 
 
-class CleanMeCheckAllButton(ButtonEntity):
-    """Button to check all zones at once."""
+# =============================================================================
+# GLOBAL BUTTONS
+# =============================================================================
+
+
+class GlobalBaseButton(ButtonEntity):
+    """Base class for global buttons."""
 
     _attr_has_entity_name = True
-    _attr_name = "Check All Zones"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+        self._unsubscribers: list[Callable[[], None]] = []
+
+    async def async_added_to_hass(self) -> None:
+        self._unsubscribers.append(
+            async_dispatcher_connect(
+                self._hass, SIGNAL_SYSTEM_STATE_UPDATED, self.async_write_ha_state
+            )
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        while self._unsubscribers:
+            self._unsubscribers.pop()()
+
+    def _get_spots(self) -> list[TwinSyncSpot]:
+        return [
+            spot
+            for spot in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(spot, TwinSyncSpot)
+        ]
+
+
+class CheckAllButton(GlobalBaseButton):
+    """Button to check all spots at once."""
+
+    _attr_name = "Check All Spots"
     _attr_icon = "mdi:camera-burst"
-    _attr_unique_id = "cleanme_check_all"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self._hass = hass
-        self._unsubscribers: list = []
-
-    async def async_added_to_hass(self) -> None:
-        self._unsubscribers.append(
-            async_dispatcher_connect(
-                self._hass, SIGNAL_SYSTEM_STATE_UPDATED, self.async_write_ha_state
-            )
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        while self._unsubscribers:
-            unsub = self._unsubscribers.pop()
-            unsub()
+    _attr_unique_id = "twinsync_check_all"
 
     async def async_press(self) -> None:
-        """Handle button press - check all zones."""
-        _LOGGER.info("Check All Zones button pressed")
-        zones = [
-            zone
-            for zone in self._hass.data.get(DOMAIN, {}).values()
-            if isinstance(zone, CleanMeZone)
-        ]
-        
-        for zone in zones:
-            await zone.async_request_check(reason="check_all")
+        spots = self._get_spots()
+        _LOGGER.info("Check All button pressed (%d spots)", len(spots))
+        for spot in spots:
+            await spot.async_check(reason="check_all")
 
 
-class CleanMeMarkAllCleanButton(ButtonEntity):
-    """Button to mark all zones as clean."""
+class ResetAllButton(GlobalBaseButton):
+    """Button to reset all spots at once."""
 
-    _attr_has_entity_name = True
-    _attr_name = "Mark All Clean"
+    _attr_name = "Reset All Spots"
     _attr_icon = "mdi:check-all"
-    _attr_unique_id = "cleanme_mark_all_clean"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self._hass = hass
-        self._unsubscribers: list = []
-
-    async def async_added_to_hass(self) -> None:
-        self._unsubscribers.append(
-            async_dispatcher_connect(
-                self._hass, SIGNAL_SYSTEM_STATE_UPDATED, self.async_write_ha_state
-            )
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        while self._unsubscribers:
-            unsub = self._unsubscribers.pop()
-            unsub()
+    _attr_unique_id = "twinsync_reset_all"
 
     async def async_press(self) -> None:
-        """Handle button press - mark all zones as clean."""
-        _LOGGER.info("Mark All Clean button pressed")
-        zones = [
-            zone
-            for zone in self._hass.data.get(DOMAIN, {}).values()
-            if isinstance(zone, CleanMeZone)
-        ]
-        
-        for zone in zones:
-            await zone.async_mark_clean()
+        spots = self._get_spots()
+        _LOGGER.info("Reset All button pressed (%d spots)", len(spots))
+        for spot in spots:
+            await spot.async_reset()

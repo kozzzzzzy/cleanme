@@ -1,7 +1,8 @@
+"""Binary sensor platform for TwinSync Spot."""
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Callable
+from typing import Any, Callable
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -11,27 +12,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.util.dt import as_local
 
 from .const import (
     DOMAIN,
-    ATTR_PERSONALITY,
-    ATTR_PICKINESS,
+    ATTR_DEFINITION,
+    ATTR_VOICE,
     ATTR_CAMERA_ENTITY,
     ATTR_LAST_CHECK,
-    ATTR_SNOOZE_UNTIL,
-    ATTR_ZONE_COUNT,
-    ATTR_DASHBOARD_PATH,
-    ATTR_DASHBOARD_LAST_GENERATED,
-    ATTR_DASHBOARD_LAST_ERROR,
-    ATTR_DASHBOARD_STATUS,
-    ATTR_READY,
     ATTR_SNOOZED_UNTIL,
-    ATTR_ALL_TIDY,
+    ATTR_SPOT_COUNT,
+    ATTR_READY,
+    ATTR_CURRENT_STREAK,
+    ATTR_TO_SORT_COUNT,
     SIGNAL_SYSTEM_STATE_UPDATED,
-    SIGNAL_ZONE_STATE_UPDATED,
+    SIGNAL_SPOT_STATE_UPDATED,
 )
-from .coordinator import CleanMeZone
+from .coordinator import TwinSyncSpot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,91 +37,90 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Set up CleanMe binary sensors for a config entry."""
-    zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
+    """Set up binary sensors for a spot."""
+    spot: TwinSyncSpot = hass.data[DOMAIN][entry.entry_id]
 
-    _LOGGER.info(
-        "Creating binary sensors for zone '%s' (entry_id: %s)",
-        zone.name,
-        entry.entry_id,
-    )
+    _LOGGER.info("Creating binary sensors for spot '%s'", spot.name)
 
     entities = [
-        CleanMeTidyBinarySensor(zone, entry),
-        CleanMeNeedsAttentionBinarySensor(zone, entry),
-        CleanMeOverdueBinarySensor(zone, entry),
-        CleanMeSnoozedBinarySensor(zone, entry),
+        SpotSortedBinarySensor(spot, entry),
+        SpotNeedsAttentionBinarySensor(spot, entry),
+        SpotSnoozedBinarySensor(spot, entry),
     ]
 
+    # Add global sensors only once
     domain_data = hass.data.setdefault(DOMAIN, {})
-    if not domain_data.get("ready_entity_added"):
-        _LOGGER.info("Creating global CleanMe binary sensors")
-        entities.append(CleanMeReadyBinarySensor(hass))
-        entities.append(CleanMeAllTidyBinarySensor(hass))
-        domain_data["ready_entity_added"] = True
-
-    for entity in entities:
-        _LOGGER.debug(
-            "Adding entity: unique_id=%s, has_device_info=%s",
-            getattr(entity, "unique_id", None),
-            hasattr(entity, "device_info"),
-        )
+    if not domain_data.get("global_binary_sensors_added"):
+        _LOGGER.info("Creating global TwinSync Spot binary sensors")
+        entities.append(SystemReadyBinarySensor(hass))
+        entities.append(AllSortedBinarySensor(hass))
+        domain_data["global_binary_sensors_added"] = True
 
     async_add_entities(entities)
 
 
-class CleanMeZoneBinarySensor(BinarySensorEntity):
-    """Base class for CleanMe zone binary sensors."""
+class SpotBaseBinarySensor(BinarySensorEntity):
+    """Base class for spot binary sensors."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
-        self._zone = zone
+    def __init__(self, spot: TwinSyncSpot, entry: ConfigEntry) -> None:
+        self._spot = spot
         self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        self._zone.add_listener(self.async_write_ha_state)
+        self._spot.add_listener(self.async_write_ha_state)
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info linking to the zone device."""
-        return self._zone.device_info
+        return self._spot.device_info
 
 
-class CleanMeTidyBinarySensor(CleanMeZoneBinarySensor):
-    """Binary sensor: is the room tidy?"""
+class SpotSortedBinarySensor(SpotBaseBinarySensor):
+    """Binary sensor: is the spot sorted (matching ready state)?
 
-    _attr_name = "Tidy"
+    ON = Sorted (green) - matches the user's definition
+    OFF = Needs attention (red) - doesn't match
+    """
+
+    _attr_name = "Sorted"
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
-    _attr_icon = "mdi:broom"
+    _attr_icon = "mdi:check-circle"
 
     @property
     def unique_id(self) -> str:
-        return f"{self._entry_id}_tidy"
+        return f"{self._entry_id}_sorted"
 
     @property
     def is_on(self) -> bool:
-        """Return True if tidy (ON = Green), False if messy (OFF = Red)."""
-        return self._zone.state.tidy
+        """Return True if sorted (matches definition)."""
+        return self._spot.state.sorted
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
+    def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {
-            ATTR_PERSONALITY: self._zone.personality,
-            ATTR_PICKINESS: self._zone.pickiness,
-            ATTR_CAMERA_ENTITY: self._zone.camera_entity_id,
-            ATTR_LAST_CHECK: self._zone.state.last_checked.isoformat() if self._zone.state.last_checked else None,
+            ATTR_DEFINITION: self._spot.definition,
+            ATTR_VOICE: self._spot.voice,
+            ATTR_CAMERA_ENTITY: self._spot.camera_entity_id,
+            ATTR_TO_SORT_COUNT: self._spot.state.to_sort_count,
+            ATTR_CURRENT_STREAK: self._spot.state.current_streak,
         }
 
-        if self._zone.snooze_until:
-            attrs[ATTR_SNOOZE_UNTIL] = self._zone.snooze_until.isoformat()
+        if self._spot.state.last_checked:
+            attrs[ATTR_LAST_CHECK] = self._spot.state.last_checked.isoformat()
+
+        if self._spot.snooze_until:
+            attrs[ATTR_SNOOZED_UNTIL] = self._spot.snooze_until.isoformat()
 
         return attrs
 
 
-class CleanMeNeedsAttentionBinarySensor(CleanMeZoneBinarySensor):
-    """Binary sensor: does the room need attention?"""
+class SpotNeedsAttentionBinarySensor(SpotBaseBinarySensor):
+    """Binary sensor: does the spot need attention?
+
+    ON = Needs attention (and not snoozed)
+    OFF = Either sorted, or snoozed
+    """
 
     _attr_name = "Needs attention"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
@@ -137,29 +132,16 @@ class CleanMeNeedsAttentionBinarySensor(CleanMeZoneBinarySensor):
 
     @property
     def is_on(self) -> bool:
-        """Return True if zone needs attention (messy and not snoozed)."""
-        return self._zone.needs_attention
+        """Return True if needs attention (not sorted and not snoozed)."""
+        return self._spot.needs_attention
 
 
-class CleanMeOverdueBinarySensor(CleanMeZoneBinarySensor):
-    """Binary sensor: is the zone overdue for cleaning?"""
+class SpotSnoozedBinarySensor(SpotBaseBinarySensor):
+    """Binary sensor: is the spot snoozed?
 
-    _attr_name = "Overdue"
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_icon = "mdi:clock-alert"
-
-    @property
-    def unique_id(self) -> str:
-        return f"{self._entry_id}_overdue"
-
-    @property
-    def is_on(self) -> bool:
-        """Return True if zone hasn't been cleaned in too long."""
-        return self._zone.is_overdue
-
-
-class CleanMeSnoozedBinarySensor(CleanMeZoneBinarySensor):
-    """Binary sensor: is the zone currently snoozed?"""
+    ON = Currently snoozed (checks paused)
+    OFF = Active
+    """
 
     _attr_name = "Snoozed"
     _attr_icon = "mdi:sleep"
@@ -170,21 +152,25 @@ class CleanMeSnoozedBinarySensor(CleanMeZoneBinarySensor):
 
     @property
     def is_on(self) -> bool:
-        """Return True if zone is currently snoozed."""
-        return self._zone.is_snoozed
+        """Return True if snoozed."""
+        return self._spot.is_snoozed
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return snooze end time."""
-        if self._zone.snooze_until:
-            return {ATTR_SNOOZED_UNTIL: self._zone.snooze_until.isoformat()}
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if self._spot.snooze_until:
+            return {ATTR_SNOOZED_UNTIL: self._spot.snooze_until.isoformat()}
         return {}
 
 
-class CleanMeGlobalBinarySensor(BinarySensorEntity):
-    """Base class for global CleanMe binary sensors."""
+# =============================================================================
+# GLOBAL BINARY SENSORS
+# =============================================================================
 
-    _attr_has_entity_name = False
+
+class GlobalBaseBinarySensor(BinarySensorEntity):
+    """Base class for global binary sensors."""
+
+    _attr_has_entity_name = False  # Use full name for entity_id
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -198,86 +184,80 @@ class CleanMeGlobalBinarySensor(BinarySensorEntity):
         )
         self._unsubscribers.append(
             async_dispatcher_connect(
-                self._hass, SIGNAL_ZONE_STATE_UPDATED, self.async_write_ha_state
+                self._hass, SIGNAL_SPOT_STATE_UPDATED, self.async_write_ha_state
             )
         )
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         while self._unsubscribers:
-            unsub = self._unsubscribers.pop()
-            unsub()
+            self._unsubscribers.pop()()
 
-    def _get_zones(self) -> list[CleanMeZone]:
-        """Get all CleanMe zones."""
+    def _get_spots(self) -> list[TwinSyncSpot]:
+        """Get all spots."""
         return [
-            zone
-            for zone in self._hass.data.get(DOMAIN, {}).values()
-            if isinstance(zone, CleanMeZone)
+            spot
+            for spot in self._hass.data.get(DOMAIN, {}).values()
+            if isinstance(spot, TwinSyncSpot)
         ]
 
 
-class CleanMeReadyBinarySensor(CleanMeGlobalBinarySensor):
-    """Binary sensor showing CleanMe overall readiness."""
+class SystemReadyBinarySensor(GlobalBaseBinarySensor):
+    """Binary sensor: is the system ready?
 
-    _attr_name = "CleanMe Ready"
+    ON = At least one spot configured, dashboard generated
+    OFF = No spots or dashboard error
+    """
+
+    _attr_name = "TwinSync Ready"
     _attr_icon = "mdi:check-circle"
-    _attr_unique_id = "cleanme_ready"
+    _attr_unique_id = "twinsync_ready"
 
     @property
     def is_on(self) -> bool:
-        zones = self._get_zones()
+        spots = self._get_spots()
         dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
 
-        has_dashboard = bool(dashboard_state.get(ATTR_DASHBOARD_PATH))
-        healthy = dashboard_state.get(ATTR_DASHBOARD_STATUS) not in {"error", "unavailable"}
+        has_spots = len(spots) > 0
+        dashboard_ok = dashboard_state.get("dashboard_status") not in {"error", "unavailable"}
 
-        return bool(zones and has_dashboard and healthy)
+        return has_spots and dashboard_ok
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         dashboard_state = self._hass.data.get(DOMAIN, {}).get("dashboard_state", {})
-        zones = self._get_zones()
-
-        last_generated = dashboard_state.get(ATTR_DASHBOARD_LAST_GENERATED)
-        if last_generated:
-            last_generated = as_local(last_generated).isoformat()
-
-        ready = self.is_on
-
         return {
-            ATTR_ZONE_COUNT: len(zones),
-            ATTR_DASHBOARD_PATH: dashboard_state.get(ATTR_DASHBOARD_PATH),
-            ATTR_DASHBOARD_LAST_GENERATED: last_generated,
-            ATTR_DASHBOARD_LAST_ERROR: dashboard_state.get(ATTR_DASHBOARD_LAST_ERROR),
-            ATTR_READY: ready,
+            ATTR_SPOT_COUNT: len(self._get_spots()),
+            ATTR_READY: self.is_on,
         }
 
 
-class CleanMeAllTidyBinarySensor(CleanMeGlobalBinarySensor):
-    """Binary sensor showing if all zones are tidy."""
+class AllSortedBinarySensor(GlobalBaseBinarySensor):
+    """Binary sensor: are all spots sorted?
 
-    _attr_name = "CleanMe All Tidy"
+    ON = Every spot matches its definition
+    OFF = At least one spot needs attention
+    """
+
+    _attr_name = "TwinSync All Sorted"
     _attr_icon = "mdi:home-heart"
-    _attr_unique_id = "cleanme_all_tidy"
+    _attr_unique_id = "twinsync_all_sorted"
 
     @property
     def is_on(self) -> bool:
-        """Return True if all zones are tidy."""
-        zones = self._get_zones()
-        if not zones:
+        spots = self._get_spots()
+        if not spots:
             return False
-        return all(zone.state.tidy for zone in zones)
+        return all(s.state.sorted for s in spots)
 
     @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return zone status summary."""
-        zones = self._get_zones()
-        tidy_zones = [zone.name for zone in zones if zone.state.tidy]
-        messy_zones = [zone.name for zone in zones if not zone.state.tidy]
-        
+    def extra_state_attributes(self) -> dict[str, Any]:
+        spots = self._get_spots()
+        sorted_spots = [s.name for s in spots if s.state.sorted]
+        needs_attention = [s.name for s in spots if not s.state.sorted]
+
         return {
-            "tidy_zones": tidy_zones,
-            "messy_zones": messy_zones,
-            ATTR_ZONE_COUNT: len(zones),
+            "sorted_spots": sorted_spots,
+            "needs_attention": needs_attention,
+            ATTR_SPOT_COUNT: len(spots),
         }

@@ -1,4 +1,4 @@
-"""Select platform for CleanMe."""
+"""Select platform for TwinSync Spot."""
 from __future__ import annotations
 
 import logging
@@ -10,12 +10,10 @@ from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import (
     DOMAIN,
-    PRIORITY_OPTIONS,
-    PERSONALITY_OPTIONS,
-    DEFAULT_PRIORITY,
-    PERSONALITY_FRIENDLY,
+    VOICES,
+    DEFAULT_VOICE,
 )
-from .coordinator import CleanMeZone
+from .coordinator import TwinSyncSpot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,96 +23,65 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Set up CleanMe select entities for a config entry."""
-    zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
+    """Set up select entities for a spot."""
+    spot: TwinSyncSpot = hass.data[DOMAIN][entry.entry_id]
 
-    _LOGGER.info(
-        "Creating select entities for zone '%s' (entry_id: %s)",
-        zone.name,
-        entry.entry_id,
-    )
+    _LOGGER.info("Creating select entities for spot '%s'", spot.name)
 
     entities = [
-        CleanMePrioritySelect(zone, entry),
-        CleanMePersonalitySelect(zone, entry),
+        SpotVoiceSelect(spot, entry),
     ]
 
     async_add_entities(entities)
 
 
-class CleanMePrioritySelect(SelectEntity):
-    """Select entity for zone priority."""
+class SpotVoiceSelect(SelectEntity):
+    """Select entity for choosing the voice style.
+
+    Changes how the AI communicates about the spot.
+    """
 
     _attr_has_entity_name = True
-    _attr_name = "Priority"
-    _attr_icon = "mdi:flag"
-    _attr_options = list(PRIORITY_OPTIONS.keys())
+    _attr_name = "Voice"
+    _attr_icon = "mdi:account-voice"
 
-    def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
-        self._zone = zone
+    def __init__(self, spot: TwinSyncSpot, entry: ConfigEntry) -> None:
+        self._spot = spot
         self._entry_id = entry.entry_id
 
+        # Build options from VOICES dict
+        self._attr_options = list(VOICES.keys())
+
     async def async_added_to_hass(self) -> None:
-        self._zone.add_listener(self.async_write_ha_state)
+        self._spot.add_listener(self.async_write_ha_state)
 
     @property
     def unique_id(self) -> str:
-        return f"{self._entry_id}_priority"
+        return f"{self._entry_id}_voice"
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info linking to the zone device."""
-        return self._zone.device_info
+        return self._spot.device_info
 
     @property
     def current_option(self) -> str:
-        """Return current priority."""
-        return self._zone.priority
+        """Return current voice."""
+        return self._spot.voice
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Return voice details."""
+        voice_config = VOICES.get(self._spot.voice, VOICES[DEFAULT_VOICE])
+        return {
+            "voice_name": voice_config["name"],
+            "voice_description": voice_config["description"],
+        }
 
     async def async_select_option(self, option: str) -> None:
-        """Set new priority."""
-        _LOGGER.info(
-            "Setting priority for zone '%s' to '%s'",
-            self._zone.name,
-            option,
-        )
-        await self._zone.async_set_priority(option)
+        """Set new voice."""
+        if option not in VOICES:
+            _LOGGER.warning("Invalid voice '%s' for spot '%s'", option, self._spot.name)
+            return
 
-
-class CleanMePersonalitySelect(SelectEntity):
-    """Select entity for AI personality."""
-
-    _attr_has_entity_name = True
-    _attr_name = "AI Personality"
-    _attr_icon = "mdi:robot-happy"
-    _attr_options = list(PERSONALITY_OPTIONS.keys())
-
-    def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
-        self._zone = zone
-        self._entry_id = entry.entry_id
-
-    async def async_added_to_hass(self) -> None:
-        self._zone.add_listener(self.async_write_ha_state)
-
-    @property
-    def unique_id(self) -> str:
-        return f"{self._entry_id}_ai_personality"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info linking to the zone device."""
-        return self._zone.device_info
-
-    @property
-    def current_option(self) -> str:
-        """Return current personality."""
-        return self._zone.personality
-
-    async def async_select_option(self, option: str) -> None:
-        """Set new personality."""
-        _LOGGER.info(
-            "Setting AI personality for zone '%s' to '%s'",
-            self._zone.name,
-            option,
-        )
-        await self._zone.async_set_personality(option)
+        _LOGGER.info("Setting voice for '%s' to '%s'", self._spot.name, option)
+        await self._spot.async_set_voice(option)

@@ -1,4 +1,4 @@
-"""Number platform for CleanMe."""
+"""Number platform for TwinSync Spot."""
 from __future__ import annotations
 
 import logging
@@ -12,7 +12,7 @@ from .const import (
     DOMAIN,
     DEFAULT_CHECK_INTERVAL_HOURS,
 )
-from .coordinator import CleanMeZone
+from .coordinator import TwinSyncSpot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,27 +22,26 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Set up CleanMe number entities for a config entry."""
-    zone: CleanMeZone = hass.data[DOMAIN][entry.entry_id]
+    """Set up number entities for a spot."""
+    spot: TwinSyncSpot = hass.data[DOMAIN][entry.entry_id]
 
-    _LOGGER.info(
-        "Creating number entities for zone '%s' (entry_id: %s)",
-        zone.name,
-        entry.entry_id,
-    )
+    _LOGGER.info("Creating number entities for spot '%s'", spot.name)
 
     entities = [
-        CleanMeCheckIntervalNumber(zone, entry),
+        SpotCheckIntervalNumber(spot, entry),
     ]
 
     async_add_entities(entities)
 
 
-class CleanMeCheckIntervalNumber(NumberEntity):
-    """Number entity for check interval (hours)."""
+class SpotCheckIntervalNumber(NumberEntity):
+    """Number entity for adjusting check interval.
+
+    How many hours between automatic checks.
+    """
 
     _attr_has_entity_name = True
-    _attr_name = "Check Interval"
+    _attr_name = "Check interval"
     _attr_icon = "mdi:timer-outline"
     _attr_native_min_value = 1
     _attr_native_max_value = 168  # 1 week
@@ -50,12 +49,12 @@ class CleanMeCheckIntervalNumber(NumberEntity):
     _attr_native_unit_of_measurement = "hours"
     _attr_mode = NumberMode.SLIDER
 
-    def __init__(self, zone: CleanMeZone, entry: ConfigEntry) -> None:
-        self._zone = zone
+    def __init__(self, spot: TwinSyncSpot, entry: ConfigEntry) -> None:
+        self._spot = spot
         self._entry_id = entry.entry_id
 
     async def async_added_to_hass(self) -> None:
-        self._zone.add_listener(self.async_write_ha_state)
+        self._spot.add_listener(self.async_write_ha_state)
 
     @property
     def unique_id(self) -> str:
@@ -63,19 +62,14 @@ class CleanMeCheckIntervalNumber(NumberEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info linking to the zone device."""
-        return self._zone.device_info
+        return self._spot.device_info
 
     @property
     def native_value(self) -> float:
         """Return current check interval."""
-        return self._zone.check_interval_hours
+        return self._spot.check_interval_hours
 
     async def async_set_native_value(self, value: float) -> None:
         """Set new check interval."""
-        _LOGGER.info(
-            "Setting check interval for zone '%s' to %s hours",
-            self._zone.name,
-            value,
-        )
-        await self._zone.async_set_check_interval(value)
+        _LOGGER.info("Setting check interval for '%s' to %s hours", self._spot.name, value)
+        await self._spot.async_set_check_interval(value)

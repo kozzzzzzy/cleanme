@@ -1,8 +1,7 @@
-"""Gemini API client for CleanMe.
+"""Gemini API client for TwinSync Spot.
 
-Uses Google's Gemini 2.0 Flash model for fast, accurate
-vision analysis of room images. Supports configurable personalities and
-pickiness levels for customized tidiness assessments.
+Uses Google's Gemini 2.0 Flash model to compare photos
+against the user's definition of their spot's Ready State.
 """
 from __future__ import annotations
 
@@ -10,48 +9,47 @@ import base64
 import json
 import logging
 import time
-from typing import Any, Dict
+from typing import Any
 
 import aiohttp
 
-from .const import GEMINI_MODEL, GEMINI_API_BASE, AI_PERSONALITIES
+from .const import GEMINI_MODEL, GEMINI_API_BASE
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class GeminiClientError(Exception):
-    """Raised when the Gemini API client fails."""
+    """Raised when Gemini API fails."""
 
 
 class GeminiClient:
     """Client for Gemini API with vision capabilities."""
 
     def __init__(self, api_key: str) -> None:
-        """Initialize Gemini client."""
         self._api_key = api_key
 
-    async def analyze_image(
+    async def analyze_spot(
         self,
         session: aiohttp.ClientSession,
         image_bytes: bytes,
-        room_name: str,
-        personality: str,
-        pickiness: int,
-    ) -> Dict[str, Any]:
+        spot_name: str,
+        definition: str,
+        voice_prompt: str,
+        memory_context: str,
+    ) -> dict[str, Any]:
         """
-        Analyze room image using Gemini vision model.
+        Analyze spot image against user's definition.
 
         Returns dict with:
-        - tidy: bool
-        - tasks: list of task strings
-        - comment: str
-        - severity: str (low/medium/high)
+        - status: "sorted" or "needs_attention"
+        - to_sort: list of items not matching definition
+        - looking_good: list of items matching definition
+        - notes: dict with main/pattern/encouragement
         """
         start_time = time.time()
 
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        prompt = self._build_prompt(room_name, personality, pickiness)
+        prompt = self._build_prompt(spot_name, definition, voice_prompt, memory_context)
 
         url = f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}:generateContent"
 
@@ -86,15 +84,9 @@ class GeminiClient:
             async with session.post(url, headers=headers, json=payload, timeout=90) as resp:
                 if resp.status == 429:
                     text = await resp.text()
-                    _LOGGER.warning(
-                        "Gemini API quota exceeded (429). This usually means your free-tier "
-                        "quota is exhausted. Model: %s. Response: %s",
-                        GEMINI_MODEL,
-                        text[:500],
-                    )
+                    _LOGGER.warning("Gemini quota exceeded: %s", text[:500])
                     raise GeminiClientError(
-                        f"Gemini API quota exceeded. Free-tier limit reached for model {GEMINI_MODEL}. "
-                        "Try again later or upgrade your API key."
+                        "Gemini API quota exceeded. Try again later."
                     )
                 if resp.status != 200:
                     text = await resp.text()
@@ -102,142 +94,184 @@ class GeminiClient:
 
                 data = await resp.json()
         except aiohttp.ClientError as err:
-            raise GeminiClientError(f"Network error calling Gemini API: {err}") from err
+            raise GeminiClientError(f"Network error: {err}") from err
+        except GeminiClientError:
+            raise
         except Exception as err:
-            raise GeminiClientError(f"Unexpected error calling Gemini API: {err}") from err
+            raise GeminiClientError(f"Unexpected error: {err}") from err
 
         response_time = time.time() - start_time
 
-        # Parse Gemini response
+        # Parse response
         try:
-            candidates = data.get("candidates", [])
-            if not candidates:
-                raise ValueError("No candidates in response")
-
-            first = candidates[0]
-            parts = first.get("content", {}).get("parts", [])
-
-            text_block = None
-            for part in parts:
-                if "text" in part:
-                    text_block = part["text"]
-                    break
-
-            if not text_block:
-                raise ValueError("No text content in response")
-
-            # Extract JSON from response (handle markdown code blocks)
-            text_block = text_block.strip()
-            if text_block.startswith("```json"):
-                text_block = text_block[7:]
-            if text_block.startswith("```"):
-                text_block = text_block[3:]
-            if text_block.endswith("```"):
-                text_block = text_block[:-3]
-
-            parsed = json.loads(text_block.strip())
-
+            parsed = self._parse_response(data)
         except Exception as err:
             _LOGGER.error("Failed to parse Gemini response: %s", data)
-            raise GeminiClientError(f"Malformed Gemini response: {err}") from err
+            raise GeminiClientError(f"Invalid response format: {err}") from err
 
-        # Validate and normalize response
-        result = self._validate_response(parsed)
-        result["api_response_time"] = response_time
-        result["image_size"] = len(image_bytes)
+        parsed["api_response_time"] = response_time
+        parsed["image_size"] = len(image_bytes)
 
-        return result
+        return parsed
 
-    def _build_prompt(self, room_name: str, personality: str, pickiness: int) -> str:
-        """Build the analysis prompt with personality and pickiness instructions."""
-        # Use friendly as default fallback - guaranteed to exist in AI_PERSONALITIES
-        default_personality = AI_PERSONALITIES.get("friendly", list(AI_PERSONALITIES.values())[0])
-        personality_config = AI_PERSONALITIES.get(personality, default_personality)
-        personality_prompt = personality_config["system_prompt"]
-        pickiness_instructions = self._get_pickiness_instructions(pickiness)
+    def _build_prompt(
+        self,
+        spot_name: str,
+        definition: str,
+        voice_prompt: str,
+        memory_context: str,
+    ) -> str:
+        """Build the analysis prompt."""
+        return f'''You are checking if "{spot_name}" matches its Ready State.
 
-        return f"""{personality_prompt}
+THE USER'S DEFINITION OF READY STATE:
+{definition}
 
-You are analyzing a photo of the "{room_name}" in someone's home.
-Pickiness level: {pickiness}/5
+HISTORY (from previous checks):
+{memory_context}
 
-{pickiness_instructions}
+YOUR VOICE (how to communicate):
+{voice_prompt}
 
-Look at this image carefully and provide your response as JSON:
+TASK:
+Look at the photo and compare it to the user's definition above.
+
+1. List what's "To sort" - things that DON'T match the definition
+2. List what's "Looking good" - things that DO match the definition
+3. Write brief notes in your voice
+4. If the history mentions patterns, you can reference them
+
+RULES:
+- Be SPECIFIC about what you see. "Coffee mug on left side of desk" not "items present"
+- Reference the user's OWN WORDS from their definition
+- If they said "no dishes" and you see dishes, call that out specifically
+- Keep notes to 2-3 sentences MAX
+- NEVER say "AI" or mention being an AI
+- NEVER use generic phrases like "Let's get organized!"
+- NEVER use the word "deviation" or "violation" or "spec"
+
+RETURN THIS EXACT JSON FORMAT:
 {{
-    "tidy": true/false,
-    "tasks": ["specific task 1", "specific task 2"],
-    "comment": "your in-character comment about the room (2 sentences MAX, under 200 chars)",
-    "severity": "low/medium/high"
+    "status": "sorted" or "needs_attention",
+    "to_sort": [
+        {{"item": "specific item name", "location": "where it is"}}
+    ],
+    "looking_good": ["item 1", "item 2"],
+    "notes": {{
+        "main": "Your main observation in 1-2 sentences",
+        "pattern": "Any pattern from history worth mentioning, or null",
+        "encouragement": "Something encouraging if appropriate, or null"
+    }}
 }}
 
 IMPORTANT:
-- Be specific about what you see. Don't be generic.
-- If you see specific items (red shirt on floor, pizza box, dirty dishes), mention them BY NAME.
-- The "comment" MUST be 2 sentences MAX and under 200 characters total. Be punchy, not verbose!
-- Stay fully in character - this is the main thing the user sees!
-Do not include any markdown formatting, just raw JSON."""
+- If EVERYTHING matches the definition, return status "sorted" with empty to_sort
+- If ANYTHING doesn't match, return status "needs_attention"
+- Do NOT include a "recurring" field - that's calculated separately
+- Return ONLY valid JSON, no markdown, no extra text'''
 
-    def _get_pickiness_instructions(self, pickiness: int) -> str:
-        """Get pickiness level instructions."""
-        instructions = {
-            1: "Level 1 Pickiness: Only report major messes, health hazards, or obvious clutter that significantly impacts the space.",
-            2: "Level 2 Pickiness: Report significant items but ignore minor things. Focus on visible problems that should be addressed soon.",
-            3: "Level 3 Pickiness: Report normal everyday tidiness issues. Use standard home cleanliness expectations.",
-            4: "Level 4 Pickiness: Be thorough and report most issues. Notice things that might be overlooked in a casual inspection.",
-            5: "Level 5 Pickiness: Be extremely thorough. Report any imperfections, dust, items slightly out of place, or anything less than perfect.",
-        }
-        return instructions.get(pickiness, instructions[3])
+    def _parse_response(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Parse Gemini response into structured result."""
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise ValueError("No candidates in response")
 
-    @staticmethod
-    def _validate_response(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and normalize the API response."""
+        first = candidates[0]
+        parts = first.get("content", {}).get("parts", [])
+
+        text_block = None
+        for part in parts:
+            if "text" in part:
+                text_block = part["text"]
+                break
+
+        if not text_block:
+            raise ValueError("No text in response")
+
+        # Clean up markdown formatting
+        text_block = text_block.strip()
+        if text_block.startswith("```json"):
+            text_block = text_block[7:]
+        if text_block.startswith("```"):
+            text_block = text_block[3:]
+        if text_block.endswith("```"):
+            text_block = text_block[:-3]
+
+        parsed = json.loads(text_block.strip())
+
+        # Validate and normalize
+        return self._validate_response(parsed)
+
+    def _validate_response(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Validate and normalize the parsed response."""
         if not isinstance(data, dict):
-            raise GeminiClientError("Response must be a JSON object")
+            raise ValueError("Response must be a JSON object")
 
-        # Validate tidy field
-        tidy = data.get("tidy")
-        if not isinstance(tidy, bool):
-            raise GeminiClientError(f"Invalid 'tidy' field: {tidy}")
+        # Status
+        status = data.get("status", "needs_attention")
+        if status not in ("sorted", "needs_attention"):
+            status = "needs_attention"
 
-        # Validate tasks field
-        tasks = data.get("tasks", [])
-        if not isinstance(tasks, list):
-            raise GeminiClientError("'tasks' must be a list")
+        # To sort items
+        to_sort_raw = data.get("to_sort", [])
+        if not isinstance(to_sort_raw, list):
+            to_sort_raw = []
 
-        # Clean and validate tasks
-        cleaned_tasks = []
-        for task in tasks:
-            if isinstance(task, str) and task.strip():
-                cleaned_tasks.append(task.strip())
+        to_sort = []
+        for item in to_sort_raw:
+            if isinstance(item, dict):
+                # Remove "recurring" if AI included it (we calculate this ourselves)
+                item.pop("recurring", None)
+                if item.get("item"):
+                    to_sort.append({
+                        "item": str(item.get("item", "")).strip(),
+                        "location": str(item.get("location", "")) if item.get("location") else None,
+                    })
+            elif isinstance(item, str) and item.strip():
+                to_sort.append({
+                    "item": item.strip(),
+                    "location": None,
+                })
 
-        # Validate comment
-        comment = data.get("comment", "")
-        if not isinstance(comment, str):
-            comment = str(comment)
+        # Looking good items
+        looking_good_raw = data.get("looking_good", [])
+        if not isinstance(looking_good_raw, list):
+            looking_good_raw = []
 
-        # Validate severity
-        severity = data.get("severity", "medium")
-        if severity not in ("low", "medium", "high"):
-            severity = "medium"
+        looking_good = []
+        for item in looking_good_raw:
+            if isinstance(item, str) and item.strip():
+                looking_good.append(item.strip())
+            elif isinstance(item, dict) and item.get("item"):
+                looking_good.append(str(item["item"]).strip())
+
+        # Notes
+        notes_raw = data.get("notes", {})
+        if not isinstance(notes_raw, dict):
+            notes_raw = {}
+
+        notes = {
+            "main": str(notes_raw.get("main", "")) if notes_raw.get("main") else None,
+            "pattern": str(notes_raw.get("pattern", "")) if notes_raw.get("pattern") else None,
+            "encouragement": str(notes_raw.get("encouragement", "")) if notes_raw.get("encouragement") else None,
+        }
 
         return {
-            "tidy": tidy,
-            "tasks": cleaned_tasks,
-            "comment": comment.strip(),
-            "severity": severity,
+            "status": status,
+            "to_sort": to_sort,
+            "looking_good": looking_good,
+            "notes": notes,
         }
 
     async def validate_api_key(self, session: aiohttp.ClientSession) -> bool:
         """Validate that the API key works."""
         url = f"{GEMINI_API_BASE}/models/{GEMINI_MODEL}"
-
-        headers = {
-            "x-goog-api-key": self._api_key,
-        }
+        headers = {"x-goog-api-key": self._api_key}
 
         try:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 return resp.status == 200
         except Exception:
             return False
